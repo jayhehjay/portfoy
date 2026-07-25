@@ -1,0 +1,2 @@
+# Bu uygulama sadece Python standart kütüphanesini kullanır — ek paket yok.
+# Bu dosya, Render'ın projeyi "Python" olarak tanıması için gereklidir.
