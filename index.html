@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="tr">
 <head>
@@ -134,6 +135,7 @@
   .tbadge.stock { background:var(--pos-bg); color:var(--live); }
   .tbadge.etf { background:var(--etf-bg); color:var(--etf); }
   .tbadge.fund { background:var(--fund-bg); color:var(--fund); }
+  .tbadge.index { background:rgba(230,180,92,0.15); color:var(--accent); }
   td.left { text-align:left; font-family:var(--font-sans); }
   .sector-tag { font-size:0.66rem; color:var(--muted); border:1px solid var(--border); border-radius:4px; padding:2px 7px; background:var(--panel); }
   .price-main { font-weight:700; color:var(--ink); }
@@ -358,7 +360,7 @@
       position:'Pozisyonun', units:'adet', editHere:'Adedi buradan değiştir', analystTitle:'Analist Beklentisi', analystSrc:'(analistlerin görüşü)', analystConsensus:'Konsensüs', analystTarget:'Hedef Fiyat', analystsN:'{n} analist',
       analystDisc:'⚠️ Analistlerin görüşüdür; bizim tavsiyemiz veya garanti değildir.', recStrongBuy:'Güçlü Al', recBuy:'Al', recHold:'Tut', recSell:'Sat',
       note:'<b>Canlı</b> Yahoo Finance (~15 dk gecikmeli) — hisse · ETF · fon; İsveç, Norveç, ABD, Türkiye. Teknik & temel canlı.',
-      searchPh:'Ara…', all:'Tümü', tAll:'Hepsi', tStock:'Hisse', tEtf:'ETF', tFund:'Fon',
+      searchPh:'Ara…', all:'Tümü', tAll:'Hepsi', tStock:'Hisse', tEtf:'ETF', tFund:'Fon', tIndex:'Endeks',
       countStocks:'{a} / {b}', emptyRows:'Eşleşen yok.',
       colName:'İsim', colPrice:'Fiyat', colChg:'Gün Δ', colRange:'Gün Aralığı', colRSI:'RSI', colNext:'Bilanço',
       colPE:'F/K', colFwd:'İleri F/K', colFCF:'SNA', colDebtX:'Net Borç/FAVÖK', colDiv:'Temettü', colSector:'Kategori', sortHint:'Sıralamak için tıklayın',
@@ -401,7 +403,7 @@
       position:'Your Position', units:'units', editHere:'Edit quantity here', analystTitle:'Analyst Expectations', analystSrc:'(analysts’ view)', analystConsensus:'Consensus', analystTarget:'Price Target', analystsN:'{n} analysts',
       analystDisc:'⚠️ Analysts’ view; not our advice or a guarantee.', recStrongBuy:'Strong Buy', recBuy:'Buy', recHold:'Hold', recSell:'Sell',
       note:'<b>Live</b> Yahoo Finance (~15 min delay) — stocks · ETFs · funds; Sweden, Norway, USA, Turkey. Technicals & fundamentals live.',
-      searchPh:'Search…', all:'All', tAll:'All', tStock:'Stocks', tEtf:'ETF', tFund:'Funds',
+      searchPh:'Search…', all:'All', tAll:'All', tStock:'Stocks', tEtf:'ETF', tFund:'Funds', tIndex:'Index',
       countStocks:'{a} / {b}', emptyRows:'No matches.',
       colName:'Name', colPrice:'Price', colChg:'Day Δ', colRange:'Day Range', colRSI:'RSI', colNext:'Earnings',
       colPE:'P/E', colFwd:'Fwd P/E', colFCF:'FCF', colDebtX:'Net Debt/EBITDA', colDiv:'Dividend', colSector:'Category', sortHint:'Click to sort',
@@ -444,7 +446,7 @@
       position:'Ditt Innehav', units:'st', editHere:'Ändra antal här', analystTitle:'Analytikers Förväntan', analystSrc:'(analytikers syn)', analystConsensus:'Konsensus', analystTarget:'Riktkurs', analystsN:'{n} analytiker',
       analystDisc:'⚠️ Analytikers syn; inte vårt råd eller garanti.', recStrongBuy:'Starkt Köp', recBuy:'Köp', recHold:'Behåll', recSell:'Sälj',
       note:'<b>Live</b> Yahoo Finance (~15 min fördröjning) — aktier · ETF:er · fonder; Sverige, Norge, USA, Turkiet. Teknik & nyckeltal live.',
-      searchPh:'Sök…', all:'Alla', tAll:'Alla', tStock:'Aktier', tEtf:'ETF', tFund:'Fonder',
+      searchPh:'Sök…', all:'Alla', tAll:'Alla', tStock:'Aktier', tEtf:'ETF', tFund:'Fonder', tIndex:'Index',
       countStocks:'{a} / {b}', emptyRows:'Inga träffar.',
       colName:'Namn', colPrice:'Kurs', colChg:'Idag Δ', colRange:'Dagsintervall', colRSI:'RSI', colNext:'Rapport',
       colPE:'P/E', colFwd:'Framåt P/E', colFCF:'FKF', colDebtX:'Nettoskuld/EBITDA', colDiv:'Utdelning', colSector:'Kategori', sortHint:'Klicka för att sortera',
@@ -488,6 +490,7 @@
   function S(name,ticker,ysym,country,sector,q){ var o={name:name,ticker:ticker,ysym:ysym,country:country,sector:sector,type:'stock'}; q=q||['-','-','-','-']; o.q1=q[0];o.q2=q[1];o.q3=q[2];o.q4=q[3]; return o; }
   function E(name,ticker,ysym,country,sector){ return {name:name,ticker:ticker,ysym:ysym,country:country,sector:sector,type:'etf',q1:'-',q2:'-',q3:'-',q4:'-'}; }
   function F(name,ticker,ysym,country,sector){ return {name:name,ticker:ticker,ysym:ysym,country:country,sector:sector,type:'fund',q1:'-',q2:'-',q3:'-',q4:'-'}; }
+  function IDX(name,ticker,ysym,country,sector){ return {name:name,ticker:ticker,ysym:ysym,country:country,sector:sector,type:'index',q1:'-',q2:'-',q3:'-',q4:'-'}; }
   var DEFAULTS = {
     'lundin':S('Lundin Mining','LUMI','LUMI.ST','🇸🇪','Madencilik',['-','Mayıs','Ağustos','Kasım']),
     'attendo':S('Attendo','ATT','ATT.ST','🇸🇪','Sağlık',['-','Mayıs','-','-']),
@@ -556,6 +559,15 @@
     'fund-finserve':1204, 'fund-dnb-tech':117, 'fund-avanza-ark':17773, 'fund-avanza-zero':6545, 'fund-soic-china':4261,
     'fund-topp-sverige':3516, 'fund-avanza-em':734, 'fund-avanza-usa':564
   };
+  var INDEX_ITEMS = {
+    'idx-sp500':IDX('S&P 500','SPX','^GSPC','🇺🇸','Endeks'),
+    'idx-vix':IDX('VIX (Korku Endeksi)','VIX','^VIX','🇺🇸','Endeks'),
+    'idx-omx':IDX('OMX Stockholm 30','OMX','^OMX','🇸🇪','Endeks'),
+    'idx-bist':IDX('BIST 100','XU100','XU100.IS','🇹🇷','Endeks'),
+    'idx-gold':IDX('Altın (Ons)','XAU','GC=F','🌐','Emtia'),
+    'idx-silver':IDX('Gümüş (Ons)','XAG','SI=F','🌐','Emtia')
+  };
+  Object.keys(INDEX_ITEMS).forEach(function(k){ if(!DEFAULTS[k]) DEFAULTS[k]=INDEX_ITEMS[k]; });
   var MONTHS = {'Ocak':1,'Şubat':2,'Mart':3,'Nisan':4,'Mayıs':5,'Haziran':6,'Temmuz':7,'Ağustos':8,'Eylül':9,'Ekim':10,'Kasım':11,'Aralık':12};
   var QK=['q1','q2','q3','q4'];
   var LS_KEY='portfoyYahoo_v4';
@@ -677,7 +689,7 @@
       if(va<vb) return -1*state.sortDir; if(va>vb) return 1*state.sortDir; return state.companies[a].name.localeCompare(state.companies[b].name); });
     return state.swingOnly ? rows.slice(0,6) : rows;
   }
-  function typeBadge(c){ return '<span class="tbadge '+c.type+'">'+(c.type==='etf'?'ETF':c.type==='fund'?t('tFund'):t('tStock'))+'</span>'; }
+  function typeBadge(c){ return '<span class="tbadge '+c.type+'">'+(c.type==='etf'?'ETF':c.type==='fund'?t('tFund'):c.type==='index'?t('tIndex'):t('tStock'))+'</span>'; }
   function liveBadge(c){ var l=c.live||{}; if(l.status==='live') return '<span class="badge live">'+t('live')+'</span>'; if(l.status==='loading') return '<span class="badge loading">…</span>'; if(l.status==='err') return '<span class="badge err" title="'+esc(l.msg||'')+'">—</span>'; return ''; }
   function priceCell(c){ var l=c.live||{}; if(l.status==='live'&&l.price!=null) return '<span class="price-main">'+fmtPrice(l.price,l.currency)+'</span>'; if(l.status==='loading') return '<span class="dim">…</span>'; return '<span class="dim">—</span>'; }
   function chgCell(c){ var l=c.live||{}; if(l.status==='live'&&l.pct!=null){ var cls=l.pct>0?'pos':l.pct<0?'neg':'flat'; return '<span class="chg '+cls+'">'+fmtPct(l.pct)+'</span>'; } return '<span class="dim">—</span>'; }
@@ -717,7 +729,7 @@
     tb.innerHTML=html;
   }
   function renderRow(k){ var tr=document.querySelector('#tbody tr[data-key="'+k+'"]'); if(tr){ var tmp=document.createElement('tbody'); tmp.innerHTML=rowHtml(k); tr.replaceWith(tmp.firstChild); } else renderBody(); }
-  function renderTypes(){ var types=[['all','tAll'],['stock','tStock'],['etf','tEtf'],['fund','tFund']]; document.getElementById('typesel').innerHTML=types.map(function(p){ return '<button class="'+(state.typeF===p[0]?'on':'')+'" data-type="'+p[0]+'">'+t(p[1])+'</button>'; }).join(''); }
+  function renderTypes(){ var types=[['all','tAll'],['stock','tStock'],['etf','tEtf'],['fund','tFund'],['index','tIndex']]; document.getElementById('typesel').innerHTML=types.map(function(p){ return '<button class="'+(state.typeF===p[0]?'on':'')+'" data-type="'+p[0]+'">'+t(p[1])+'</button>'; }).join(''); }
   function renderFilters(){ var s={}; Object.keys(state.companies).forEach(function(k){ var c=state.companies[k]; if(state.typeF==='all'||c.type===state.typeF) s[c.sector]=1; }); var list=Object.keys(s).sort(); var h='<button class="fchip '+(state.sector==='all'?'on':'')+'" data-sector="all">'+t('all')+'</button>'; h+=list.map(function(x){return '<button class="fchip '+(state.sector===x?'on':'')+'" data-sector="'+esc(x)+'">'+esc(x)+'</button>';}).join(''); document.getElementById('filters').innerHTML=h; }
   function renderKpis(){ var keys=Object.keys(state.companies),liveN=0,g=0,l=0; keys.forEach(function(k){var v=state.companies[k].live||{}; if(v.status==='live'){liveN++; if(v.pct>0)g++; else if(v.pct<0)l++;}}); document.getElementById('kpis').innerHTML='<div class="kpi"><span class="v">'+keys.length+'</span><span class="k">'+t('kTotal')+'</span></div><div class="kpi"><span class="v accent">'+liveN+'</span><span class="k">'+t('kLive')+'</span></div><div class="kpi"><span class="v pos">'+g+'</span><span class="k">'+t('kUp')+'</span></div><div class="kpi"><span class="v neg">'+l+'</span><span class="k">'+t('kDown')+'</span></div>'; }
   function toCcy(sek){ var u=(state.fx&&state.fx.sekPer&&state.fx.sekPer.USD)||null; if(state.ccy==='SEK'||!u) return sek; if(state.ccy==='USD') return sek/u; if(state.ccy==='TRY'){ var tr=(state.fx&&state.fx.usdTry)||null; return tr?(sek/u*tr):sek; } return sek; }
@@ -869,7 +881,7 @@
     {section:t('secIdentity')},
     {id:'name',label:t('fName'),span2:true,ph:'Volvo Group'},{id:'ticker',label:t('fTicker'),ph:'VOLV-B'},
     {id:'ysym',label:t('fYsym'),span2:true,ph:'VOLV-B.ST · AAPL · 0P…ST',hint:t('fYsymHint')},
-    {id:'type',label:t('fType'),select:[['stock',t('tStock')],['etf','ETF'],['fund',t('tFund')]]},
+    {id:'type',label:t('fType'),select:[['stock',t('tStock')],['etf','ETF'],['fund',t('tFund')],['index',t('tIndex')]]},
     {id:'country',label:t('fCountry'),ph:'🇸🇪'},{id:'sector',label:t('fSector'),ph:'Madencilik'},
     {section:t('secPortfolio')},{id:'antal',label:t('fUnits'),span3:true,ph:'0',hint:t('fUnitsHint')} ];
     if(isStock){ arr.push({section:t('secMonths')},{id:'q1',label:'Q1',ph:'-'},{id:'q2',label:'Q2',ph:'Mayıs'},{id:'q3',label:'Q3',ph:'Ağustos'},{id:'q4',label:'Q4',ph:'Kasım'}); }
