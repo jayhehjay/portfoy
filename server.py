@@ -52,7 +52,7 @@ def fetch_quote(sym):
             "name": m.get("longName"), "time": m.get("regularMarketTime")}
 
 def _quotesummary(sym, crumb):
-    mods = "defaultKeyStatistics,financialData,summaryDetail,price"
+    mods = "defaultKeyStatistics,financialData,summaryDetail,price,calendarEvents"
     url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
            % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
     return json.load(_open(url))["quoteSummary"]["result"][0]
@@ -75,6 +75,18 @@ def fetch_fund(sym):
     ks = r.get("defaultKeyStatistics", {}) or {}
     sd = r.get("summaryDetail", {}) or {}
     pr = r.get("price", {}) or {}
+    ce = r.get("calendarEvents", {}) or {}
+
+    def _day(v):
+        v = _raw(v)
+        try:
+            return time.strftime("%Y-%m-%d", time.gmtime(v)) if v else None
+        except Exception:
+            return None
+    _ed = ((ce.get("earnings") or {}).get("earningsDate")) or []
+    next_earn = _day(_ed[0]) if _ed else None
+    next_div = _day(ce.get("dividendDate"))
+    ex_div = _day(ce.get("exDividendDate")) or _day(sd.get("exDividendDate"))
     trade_ccy = pr.get("currency")
     fin_ccy = fd.get("financialCurrency") or pr.get("financialCurrency")
     def clean_pe(v):
@@ -107,6 +119,7 @@ def fetch_fund(sym):
             "targetLow": _raw(fd.get("targetLowPrice")),
             "targetHigh": _raw(fd.get("targetHighPrice")),
             "numAnalysts": _raw(fd.get("numberOfAnalystOpinions")),
+            "nextEarnings": next_earn, "dividendDate": next_div, "exDividendDate": ex_div,
             "currency": pr.get("currency")}
 
 # ---- teknik göstergeler ----
@@ -158,6 +171,44 @@ def fetch_tech(sym):
             "ma20": _sma(closes, 20), "ma50": _sma(closes, 50), "ma200": _sma(closes, 200),
             "yrHigh": hi, "yrLow": lo, "rangePos": pos, "ref": ref,
             "spark": [round(x, 3) for x in closes[-60:]]}
+
+_spot_cache = {"t": 0, "data": None}
+SPOT_MAP = {"XAUUSD": "XAU", "XAGUSD": "XAG"}
+
+def fetch_spot(sym):
+    """Spot altın/gümüş — Yahoo sadece vadeli veriyor, bu gerçek spot fiyat."""
+    code = SPOT_MAP.get(sym.upper())
+    if not code:
+        return {"ok": False, "error": "desteklenmeyen spot sembol"}
+    now = time.time()
+    cache = _spot_cache["data"] or {}
+    if cache.get(code) and now - _spot_cache["t"] < 60:
+        return cache[code]
+    try:
+        req = urllib.request.Request("https://api.gold-api.com/price/%s" % code, headers=UA)
+        d = json.load(urllib.request.urlopen(req, timeout=10))
+        price = d.get("price")
+        # gold-api önceki kapanışı vermiyor; günlük % değişimi vadeli sözleşmeden al (spot ile paralel hareket eder)
+        prev = price
+        try:
+            fut = "GC=F" if code == "XAU" else "SI=F"
+            fm = json.load(_open("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d" % fut))
+            fmeta = fm["chart"]["result"][0]["meta"]
+            fp = fmeta.get("regularMarketPrice")
+            fprev = fmeta.get("chartPreviousClose") or fmeta.get("previousClose")
+            if fp and fprev:
+                prev = price / (fp / fprev)      # aynı yüzde değişimi spot fiyata uygula
+        except Exception:
+            pass
+        out = {"ok": True, "symbol": sym, "price": price, "prevClose": prev,
+               "currency": "USD", "exchange": "SPOT",
+               "name": ("Altın (Spot)" if code == "XAU" else "Gümüş (Spot)")}
+        cache[code] = out
+        _spot_cache["data"] = cache
+        _spot_cache["t"] = now
+        return out
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 def fetch_hist(sym, rng):
     rng = rng if rng in ("1mo", "3mo", "6mo", "1y", "2y", "5y") else "6mo"
@@ -262,6 +313,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": "sembol yok"})
             try:
                 if p.path == "/api/q":
+                    if sym.upper() in SPOT_MAP:
+                        s = fetch_spot(sym)
+                        if s.get("ok"):
+                            pr, pv = s["price"], s.get("prevClose") or s["price"]
+                            ch = pr - pv
+                            s.update({"prev": pv, "change": ch,
+                                      "pct": (ch / pv * 100) if pv else 0,
+                                      "high": None, "low": None, "w52h": None, "w52l": None,
+                                      "time": int(time.time())})
+                        return _json(self, s)
                     return _json(self, fetch_quote(sym))
                 if p.path == "/api/f":
                     return _json(self, fetch_fund(sym))
