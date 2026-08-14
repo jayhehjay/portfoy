@@ -172,6 +172,270 @@ def fetch_tech(sym):
             "yrHigh": hi, "yrLow": lo, "rangePos": pos, "ref": ref,
             "spark": [round(x, 3) for x in closes[-60:]]}
 
+def _fin_day(v):
+    v = _raw(v)
+    try:
+        return time.strftime("%Y-%m-%d", time.gmtime(v)) if v else None
+    except Exception:
+        return None
+
+def _rows(items, fields):
+    """Mali tablo satırlarını sadeleştir: [{date, alan1, alan2...}]"""
+    out = []
+    for it in (items or []):
+        row = {"date": _fin_day(it.get("endDate"))}
+        for f in fields:
+            row[f] = _raw(it.get(f))
+        out.append(row)
+    return out
+
+def fetch_fundamentals(sym):
+    """Temel analiz: gelir tablosu, bilanço, nakit akışı (yıllık+çeyreklik), kâr geçmişi, profil."""
+    crumb = get_crumb()
+    if not crumb:
+        return {"ok": False, "error": "crumb yok"}
+    mods = ("assetProfile,incomeStatementHistory,incomeStatementHistoryQuarterly,"
+            "balanceSheetHistory,balanceSheetHistoryQuarterly,"
+            "cashflowStatementHistory,cashflowStatementHistoryQuarterly,"
+            "earningsHistory,earningsTrend,financialData,defaultKeyStatistics,summaryDetail,price")
+    url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+           % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
+    try:
+        r = json.load(_open(url))["quoteSummary"]["result"][0]
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            c2 = get_crumb(force=True)
+            if not c2:
+                return {"ok": False, "error": "crumb yenilenemedi"}
+            url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+            r = json.load(_open(url))["quoteSummary"]["result"][0]
+        else:
+            raise
+
+    ap = r.get("assetProfile", {}) or {}
+    fd = r.get("financialData", {}) or {}
+    ks = r.get("defaultKeyStatistics", {}) or {}
+    sd = r.get("summaryDetail", {}) or {}
+    pr = r.get("price", {}) or {}
+
+    INC = ["totalRevenue", "grossProfit", "operatingIncome", "netIncome", "ebit"]
+    BAL = ["totalAssets", "totalLiab", "totalStockholderEquity", "cash", "shortLongTermDebt", "longTermDebt"]
+    CF = ["totalCashFromOperatingActivities", "capitalExpenditures", "netIncome",
+          "dividendsPaid", "repurchaseOfStock"]
+
+    inc_a = _rows((r.get("incomeStatementHistory") or {}).get("incomeStatementHistory"), INC)
+    inc_q = _rows((r.get("incomeStatementHistoryQuarterly") or {}).get("incomeStatementHistory"), INC)
+    bal_a = _rows((r.get("balanceSheetHistory") or {}).get("balanceSheetStatements"), BAL)
+    bal_q = _rows((r.get("balanceSheetHistoryQuarterly") or {}).get("balanceSheetStatements"), BAL)
+    cf_a = _rows((r.get("cashflowStatementHistory") or {}).get("cashflowStatements"), CF)
+    cf_q = _rows((r.get("cashflowStatementHistoryQuarterly") or {}).get("cashflowStatements"), CF)
+
+    earn = []
+    for h in ((r.get("earningsHistory") or {}).get("history") or []):
+        est, act = _raw(h.get("epsEstimate")), _raw(h.get("epsActual"))
+        earn.append({"quarter": _fin_day(h.get("quarter")), "estimate": est, "actual": act,
+                     "surprisePct": _raw(h.get("surprisePercent"))})
+    earn.sort(key=lambda x: x["quarter"] or "", reverse=True)
+
+    growth = {}
+    for tr in ((r.get("earningsTrend") or {}).get("trend") or []):
+        p = tr.get("period")
+        if p in ("0q", "+1q", "0y", "+1y"):
+            growth[p] = {"growth": _raw(tr.get("growth")),
+                         "epsEstimate": _raw((tr.get("earningsEstimate") or {}).get("avg")),
+                         "revEstimate": _raw((tr.get("revenueEstimate") or {}).get("avg"))}
+
+    return {"ok": True, "symbol": sym,
+            "profile": {"name": pr.get("longName") or pr.get("shortName"),
+                        "sector": ap.get("sector"), "industry": ap.get("industry"),
+                        "employees": ap.get("fullTimeEmployees"), "country": ap.get("country"),
+                        "website": ap.get("website"), "summary": ap.get("longBusinessSummary")},
+            "currency": fd.get("financialCurrency") or pr.get("currency"),
+            "tradeCurrency": pr.get("currency"),
+            "income": {"annual": inc_a, "quarterly": inc_q},
+            "balance": {"annual": bal_a, "quarterly": bal_q},
+            "cashflow": {"annual": cf_a, "quarterly": cf_q},
+            "earningsHistory": earn, "growth": growth,
+            "ratios": {"trailingPE": _raw(sd.get("trailingPE")), "forwardPE": _raw(sd.get("forwardPE")),
+                       "priceToBook": _raw(ks.get("priceToBook")),
+                       "roe": _raw(fd.get("returnOnEquity")), "roa": _raw(fd.get("returnOnAssets")),
+                       "profitMargin": _raw(fd.get("profitMargins")),
+                       "grossMargin": _raw(fd.get("grossMargins")),
+                       "operatingMargin": _raw(fd.get("operatingMargins")),
+                       "revenueGrowth": _raw(fd.get("revenueGrowth")),
+                       "earningsGrowth": _raw(fd.get("earningsGrowth")),
+                       "debtToEquity": _raw(fd.get("debtToEquity")),
+                       "currentRatio": _raw(fd.get("currentRatio")),
+                       "quickRatio": _raw(fd.get("quickRatio")),
+                       "freeCashflow": _raw(fd.get("freeCashflow")),
+                       "ebitda": _raw(fd.get("ebitda")),
+                       "totalDebt": _raw(fd.get("totalDebt")), "totalCash": _raw(fd.get("totalCash")),
+                       "dividendYield": _raw(sd.get("dividendYield")),
+                       "payoutRatio": _raw(sd.get("payoutRatio")),
+                       "marketCap": _raw(pr.get("marketCap")) or _raw(sd.get("marketCap"))}}
+
+_market_cache = {"t": 0, "data": None}
+
+def market_direction():
+    """M kriteri: genel piyasa yönü — S&P 500'ün 200 günlük ortalamaya göre durumu."""
+    now = time.time()
+    if _market_cache["data"] and now - _market_cache["t"] < 900:
+        return _market_cache["data"]
+    out = {"ok": False}
+    try:
+        d = json.load(_open("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=1y"))
+        res = d["chart"]["result"][0]
+        cl = [c for c in (res["indicators"]["quote"][0]["close"] or []) if c is not None]
+        if len(cl) >= 200:
+            price, ma200, ma50 = cl[-1], sum(cl[-200:]) / 200.0, sum(cl[-50:]) / 50.0
+            yr = (cl[-1] / cl[0] - 1) * 100 if cl[0] else None
+            up = price > ma200
+            out = {"ok": True, "price": price, "ma200": ma200, "ma50": ma50,
+                   "uptrend": up, "abovePct": (price / ma200 - 1) * 100, "yearChange": yr}
+    except Exception as e:
+        out = {"ok": False, "error": str(e)}
+    _market_cache["data"] = out
+    _market_cache["t"] = now
+    return out
+
+def _index_for(sym):
+    """Hisseye uygun kıyas endeksi (L kriteri için)."""
+    s = sym.upper()
+    if s.endswith(".ST"):
+        return "^OMX"
+    if s.endswith(".OL"):
+        return "^OSEAX"
+    if s.endswith(".IS"):
+        return "XU100.IS"
+    if s.endswith(".CO"):
+        return "^OMXC25"
+    return "^GSPC"
+
+def _year_change(sym):
+    try:
+        d = json.load(_open("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1y"
+                            % urllib.parse.quote(sym)))
+        res = d["chart"]["result"][0]
+        cl = [c for c in (res["indicators"]["quote"][0]["close"] or []) if c is not None]
+        vols = [v for v in (res["indicators"]["quote"][0].get("volume") or []) if v]
+        if len(cl) < 20:
+            return None
+        hi, lo, last = max(cl), min(cl), cl[-1]
+        return {"change": (last / cl[0] - 1) * 100 if cl[0] else None,
+                "rangePos": ((last - lo) / (hi - lo) * 100) if hi > lo else None,
+                "high": hi, "low": lo, "price": last,
+                "volRecent": (sum(vols[-10:]) / 10.0) if len(vols) >= 10 else None,
+                "volAvg": (sum(vols[-60:]) / 60.0) if len(vols) >= 60 else None}
+    except Exception:
+        return None
+
+def fetch_canslim(sym):
+    """CAN SLIM karnesi — O'Neil metodolojisinin 7 kriteri, şeffaf puanlama."""
+    crumb = get_crumb()
+    if not crumb:
+        return {"ok": False, "error": "crumb yok"}
+    mods = ("financialData,defaultKeyStatistics,incomeStatementHistory,earningsHistory,"
+            "majorHoldersBreakdown,institutionOwnership,price")
+    url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+           % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
+    try:
+        r = json.load(_open(url))["quoteSummary"]["result"][0]
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            c2 = get_crumb(force=True)
+            url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+            r = json.load(_open(url))["quoteSummary"]["result"][0]
+        else:
+            raise
+
+    fd = r.get("financialData", {}) or {}
+    ks = r.get("defaultKeyStatistics", {}) or {}
+    mh = r.get("majorHoldersBreakdown", {}) or {}
+    io = r.get("institutionOwnership", {}) or {}
+    pr = r.get("price", {}) or {}
+
+    stock = _year_change(sym) or {}
+    idx_sym = _index_for(sym)
+    idx = _year_change(idx_sym) or {}
+    mkt = market_direction()
+    crit = []
+
+    # C — Son çeyrek kâr büyümesi (yıllık bazda), hedef >= %25
+    eg = _raw(fd.get("earningsGrowth"))
+    c_pct = eg * 100 if eg is not None else None
+    crit.append({"code": "C", "value": c_pct, "unit": "%",
+                 "pass": (c_pct is not None and c_pct >= 25),
+                 "partial": (c_pct is not None and 10 <= c_pct < 25),
+                 "target": "≥ 25%"})
+
+    # A — Yıllık kâr büyümesi + ROE >= %17
+    inc = (r.get("incomeStatementHistory") or {}).get("incomeStatementHistory") or []
+    nets = [_raw(x.get("netIncome")) for x in inc]
+    nets = [n for n in nets if n is not None]
+    a_cagr = None
+    if len(nets) >= 2 and nets[-1] and nets[-1] > 0 and nets[0] > 0:
+        yrs = len(nets) - 1
+        a_cagr = ((nets[0] / nets[-1]) ** (1.0 / yrs) - 1) * 100
+    roe = _raw(fd.get("returnOnEquity"))
+    roe_pct = roe * 100 if roe is not None else None
+    a_ok = (a_cagr is not None and a_cagr >= 25) and (roe_pct is not None and roe_pct >= 17)
+    a_part = (a_cagr is not None and a_cagr >= 10) or (roe_pct is not None and roe_pct >= 17)
+    crit.append({"code": "A", "value": a_cagr, "unit": "%", "extra": {"roe": roe_pct},
+                 "pass": a_ok, "partial": (not a_ok and a_part), "target": "büyüme ≥25% + ROE ≥17%"})
+
+    # N — 52 haftalık zirveye yakınlık
+    rp = stock.get("rangePos")
+    crit.append({"code": "N", "value": rp, "unit": "%",
+                 "pass": (rp is not None and rp >= 85), "partial": (rp is not None and 70 <= rp < 85),
+                 "target": "52h aralığında üst %15"})
+
+    # S — Arz: hisse adedi (küçük daha iyi) + hacim artışı
+    shares = _raw(ks.get("sharesOutstanding"))
+    vr, va = stock.get("volRecent"), stock.get("volAvg")
+    vol_ratio = (vr / va) if (vr and va) else None
+    s_ok = (shares is not None and shares < 500e6) and (vol_ratio is None or vol_ratio >= 1.0)
+    crit.append({"code": "S", "value": shares, "unit": "adet",
+                 "extra": {"volRatio": vol_ratio},
+                 "pass": s_ok,
+                 "partial": (shares is not None and shares < 2e9),
+                 "target": "az hisse + hacim artışı"})
+
+    # L — Lider mi? Endekse göre 1 yıllık getiri farkı
+    sc, ic = stock.get("change"), idx.get("change")
+    rel = (sc - ic) if (sc is not None and ic is not None) else None
+    crit.append({"code": "L", "value": rel, "unit": "%",
+                 "extra": {"stock": sc, "index": ic, "indexSym": idx_sym},
+                 "pass": (rel is not None and rel >= 10), "partial": (rel is not None and 0 <= rel < 10),
+                 "target": "endeksten ≥10% iyi"})
+
+    # I — Kurumsal sahiplik
+    inst = _raw(mh.get("institutionsPercentHeld"))
+    inst_pct = inst * 100 if inst is not None else None
+    holders = io.get("ownershipList") or []
+    rising = sum(1 for o in holders if (_raw(o.get("pctChange")) or 0) > 0)
+    crit.append({"code": "I", "value": inst_pct, "unit": "%",
+                 "extra": {"holders": len(holders), "rising": rising},
+                 "pass": (inst_pct is not None and 15 <= inst_pct <= 90),
+                 "partial": (inst_pct is not None and 5 <= inst_pct < 15),
+                 "target": "kurumsal sahiplik %15+"})
+
+    # M — Piyasa yönü (S&P 500 200 günlük ortalama üstünde mi)
+    m_up = mkt.get("uptrend")
+    crit.append({"code": "M", "value": mkt.get("abovePct"), "unit": "%",
+                 "extra": {"index": "S&P 500", "yearChange": mkt.get("yearChange")},
+                 "pass": bool(m_up), "partial": False,
+                 "target": "piyasa 200g ortalama üstünde"})
+
+    score = sum(2 if c["pass"] else (1 if c.get("partial") else 0) for c in crit)
+    maxs = len(crit) * 2
+    pct = score / maxs * 100 if maxs else 0
+    grade = "A" if pct >= 80 else "B" if pct >= 65 else "C" if pct >= 50 else "D" if pct >= 35 else "E"
+    return {"ok": True, "symbol": sym, "name": pr.get("longName") or pr.get("shortName"),
+            "criteria": crit, "score": score, "max": maxs, "pct": pct, "grade": grade,
+            "market": mkt}
+
 _spot_cache = {"t": 0, "data": None}
 SPOT_MAP = {"XAUUSD": "XAU", "XAGUSD": "XAG"}
 
@@ -293,10 +557,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store, max-age=0")
         super().end_headers()
 
+    def do_POST(self):
+        p = urllib.parse.urlparse(self.path)
+        if p.path == "/api/watch":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                syms = [s for s in (body.get("symbols") or []) if isinstance(s, str)][:80]
+                with _state_lock:
+                    st = _load_state()
+                    st["watch"] = syms
+                    _save_state(st)
+                return _json(self, {"ok": True, "count": len(syms)})
+            except Exception as e:
+                return _json(self, {"ok": False, "error": str(e)})
+        return _json(self, {"ok": False, "error": "bilinmeyen uç"})
+
     def do_GET(self):
         p = urllib.parse.urlparse(self.path)
         if p.path.startswith("/api/"):
             qs = urllib.parse.parse_qs(p.query)
+            if p.path == "/api/tg/status":
+                tok, ch = tg_config()
+                return _json(self, {"ok": True, "configured": bool(tok and ch)})
+            if p.path == "/api/tg/test":
+                return _json(self, tg_send("✅ Portföy bildirimleri çalışıyor!\n\nBundan sonra bilanço ve temettü tarihlerinde, sonuçlar açıklandığında haber vereceğim."))
+            if p.path == "/api/tg/check":
+                return _json(self, check_and_notify())
+            if p.path == "/api/ping":
+                return _json(self, {"ok": True, "t": int(time.time())})
             if p.path == "/api/fx":
                 try:
                     return _json(self, fetch_fx())
@@ -311,6 +600,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             sym = (qs.get("symbol") or [""])[0].strip()
             if not sym:
                 return _json(self, {"ok": False, "error": "sembol yok"})
+            if p.path == "/api/interpret":
+                try:
+                    rep = interpret_earnings(sym)
+                    return _json(self, rep or {"ok": False, "error": "veri yok"})
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             try:
                 if p.path == "/api/q":
                     if sym.upper() in SPOT_MAP:
@@ -330,6 +625,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_news(sym))
                 if p.path == "/api/tech":
                     return _json(self, fetch_tech(sym))
+                if p.path == "/api/canslim":
+                    return _json(self, fetch_canslim(sym))
+                if p.path == "/api/fundamentals":
+                    return _json(self, fetch_fundamentals(sym))
                 if p.path == "/api/hist":
                     return _json(self, fetch_hist(sym, (qs.get("range") or ["6mo"])[0]))
             except Exception as e:
@@ -339,6 +638,224 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.path = "/index.html"
         return super().do_GET()
 
+# ================= TELEGRAM BİLDİRİM + SONUÇ YORUMLAMA =================
+STATE_FILE = os.path.join(DIR, "notify_state.json")
+_state_lock = threading.Lock()
+
+def _load_state():
+    try:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"watch": [], "sent": {}, "lastEarnings": {}}
+
+def _save_state(st):
+    try:
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(st, f)
+    except Exception:
+        pass
+
+def tg_config():
+    return os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+
+def tg_send(text):
+    """Telegram'a mesaj gönder. Token ortam değişkeninde tutulur (kodda DEĞİL)."""
+    token, chat = tg_config()
+    if not token or not chat:
+        return {"ok": False, "error": "TELEGRAM_TOKEN / TELEGRAM_CHAT_ID tanımlı değil"}
+    try:
+        data = urllib.parse.urlencode({
+            "chat_id": chat, "text": text,
+            "parse_mode": "HTML", "disable_web_page_preview": "true"}).encode()
+        req = urllib.request.Request("https://api.telegram.org/bot%s/sendMessage" % token,
+                                     data=data, headers=UA)
+        r = json.load(urllib.request.urlopen(req, timeout=15))
+        return {"ok": bool(r.get("ok")), "error": r.get("description")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+def _pct(a, b):
+    """b'ye göre a'nın yüzde farkı."""
+    try:
+        if b in (None, 0) or a is None:
+            return None
+        return (a - b) / abs(b) * 100
+    except Exception:
+        return None
+
+def interpret_earnings(sym):
+    """Açıklanan bilanço sonucunu şeffaf, kural bazlı yorumla (tahmin değil, rakam karşılaştırması)."""
+    f = fetch_fundamentals(sym)
+    if not f.get("ok"):
+        return None
+    name = (f.get("profile") or {}).get("name") or sym
+    cur = f.get("currency") or ""
+    eh = f.get("earningsHistory") or []
+    inc = (f.get("income") or {}).get("quarterly") or []
+    r = f.get("ratios") or {}
+    if not eh:
+        return None
+    last = eh[0]
+    lines, verdict = [], []
+
+    est, act = last.get("estimate"), last.get("actual")
+    if est is not None and act is not None:
+        diff = _pct(act, est)
+        if diff is not None:
+            if diff >= 2:
+                lines.append("✅ EPS <b>%.2f</b> — beklenti %.2f, <b>%%%.1f üzerinde</b>" % (act, est, diff))
+                verdict.append("beklentiyi aştı")
+            elif diff <= -2:
+                lines.append("❌ EPS <b>%.2f</b> — beklenti %.2f, <b>%%%.1f altında</b>" % (act, est, abs(diff)))
+                verdict.append("beklentinin altında")
+            else:
+                lines.append("➖ EPS <b>%.2f</b> — beklentiyle uyumlu (%.2f)" % (act, est))
+                verdict.append("beklentiye paralel")
+
+    # Ciro: son çeyrek vs bir yıl önceki aynı çeyrek (4 çeyrek geriye)
+    if len(inc) >= 4 and inc[0].get("totalRevenue") and inc[3].get("totalRevenue"):
+        g = _pct(inc[0]["totalRevenue"], inc[3]["totalRevenue"])
+        if g is not None:
+            arrow = "📈" if g >= 0 else "📉"
+            lines.append("%s Ciro <b>%s</b> — geçen yılın aynı çeyreğine göre <b>%%%.1f</b>"
+                         % (arrow, _human(inc[0]["totalRevenue"], cur), g))
+            if g >= 10:
+                verdict.append("ciro güçlü büyüdü")
+            elif g < 0:
+                verdict.append("ciro daraldı")
+
+    # Kâr marjı trendi
+    if len(inc) >= 2:
+        def marg(x):
+            rev, net = x.get("totalRevenue"), x.get("netIncome")
+            return (net / rev * 100) if (rev and net is not None) else None
+        m0, m1 = marg(inc[0]), marg(inc[1])
+        if m0 is not None and m1 is not None:
+            d = m0 - m1
+            sign = "yükseldi" if d > 0.5 else ("geriledi" if d < -0.5 else "yatay")
+            lines.append("📊 Net kâr marjı <b>%%%.1f</b> — önceki çeyreğe göre %s" % (m0, sign))
+
+    if r.get("debtEbitda") is None and r.get("totalDebt") is not None and r.get("ebitda"):
+        pass
+    if r.get("profitMargin") is not None:
+        pass
+
+    head = "📣 <b>%s</b> — çeyrek sonuçları açıklandı" % name
+    if last.get("quarter"):
+        head += "\n<i>Dönem: %s</i>" % last["quarter"]
+    body = "\n".join("• " + x for x in lines) if lines else "• Ayrıntılı veri bulunamadı."
+    tail = ""
+    if verdict:
+        tail = "\n\n<b>Özet:</b> " + ", ".join(verdict) + "."
+    tail += "\n\n<i>Bilgi amaçlıdır; yatırım tavsiyesi değildir.</i>"
+    return {"symbol": sym, "name": name, "quarter": last.get("quarter"),
+            "text": head + "\n\n" + body + tail, "lines": lines, "verdict": verdict}
+
+def _human(v, cur=""):
+    if v is None:
+        return "—"
+    a = abs(v)
+    if a >= 1e9:
+        s = "%.2fB" % (v / 1e9)
+    elif a >= 1e6:
+        s = "%.1fM" % (v / 1e6)
+    elif a >= 1e3:
+        s = "%.0fK" % (v / 1e3)
+    else:
+        s = "%.0f" % v
+    return s + ((" " + cur) if cur else "")
+
+def check_and_notify():
+    """Takip listesindeki hisseler için: yaklaşan tarihleri ve yeni açıklanan sonuçları bildir."""
+    token, chat = tg_config()
+    if not token or not chat:
+        return {"ok": False, "error": "telegram ayarlı değil"}
+    with _state_lock:
+        st = _load_state()
+    watch = st.get("watch") or []
+    sent = st.get("sent") or {}
+    last_earn = st.get("lastEarnings") or {}
+    today = time.strftime("%Y-%m-%d")
+    n_sent = 0
+
+    for sym in watch[:60]:
+        try:
+            f = fetch_fund(sym)
+            if not f.get("ok"):
+                continue
+            # 1) Yaklaşan tarih uyarıları (bugün / 1 gün kala)
+            for field, label in (("nextEarnings", "📊 Bilanço günü"),
+                                 ("dividendDate", "💰 Temettü ödemesi"),
+                                 ("exDividendDate", "✂️ Temettü son gün")):
+                iso = f.get(field)
+                if not iso:
+                    continue
+                try:
+                    d = (time.mktime(time.strptime(iso, "%Y-%m-%d"))
+                         - time.mktime(time.strptime(today, "%Y-%m-%d"))) / 86400
+                except Exception:
+                    continue
+                if d in (0, 1):
+                    key = "%s|%s|%s" % (sym, field, iso)
+                    if sent.get(key):
+                        continue
+                    when = "bugün" if d == 0 else "yarın"
+                    tg_send("%s — <b>%s</b>\n%s (%s)" % (label, sym, when, iso))
+                    sent[key] = today
+                    n_sent += 1
+
+            # 2) Yeni açıklanan sonuç -> yorumla
+            fu = fetch_fundamentals(sym)
+            eh = (fu.get("earningsHistory") or []) if fu.get("ok") else []
+            if eh and eh[0].get("actual") is not None:
+                q = eh[0].get("quarter")
+                if q and last_earn.get(sym) != q:
+                    rep = interpret_earnings(sym)
+                    if rep:
+                        tg_send(rep["text"])
+                        n_sent += 1
+                    last_earn[sym] = q
+        except Exception:
+            continue
+
+    with _state_lock:
+        st["sent"] = sent
+        st["lastEarnings"] = last_earn
+        _save_state(st)
+    return {"ok": True, "sent": n_sent, "watched": len(watch)}
+
+def notify_loop():
+    def loop():
+        time.sleep(120)
+        while True:
+            try:
+                check_and_notify()
+            except Exception:
+                pass
+            time.sleep(6 * 60 * 60)      # 6 saatte bir kontrol
+    threading.Thread(target=loop, daemon=True).start()
+
+def keep_alive():
+    """Render ücretsiz planda 15 dk hareketsizlikte uyur. Kendi adresimize düzenli
+    istek atarak servisi uyanık tutuyoruz (aylık ~730 saat, 750 saat limitine sığar)."""
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return                       # yerelde çalışmaz, gerek de yok
+    ping = url.rstrip("/") + "/api/ping"
+
+    def loop():
+        time.sleep(60)
+        while True:
+            try:
+                urllib.request.urlopen(urllib.request.Request(ping, headers=UA), timeout=20).read()
+            except Exception:
+                pass
+            time.sleep(11 * 60)      # 11 dakikada bir (15 dk limitin altında)
+
+    th = threading.Thread(target=loop, daemon=True)
+    th.start()
+
 if __name__ == "__main__":
     # Bulut (Render vb.) PORT'u ortam değişkeninden verir; yerelde 8000.
     port = int(os.environ.get("PORT", PORT))
@@ -346,5 +863,7 @@ if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
     handler = functools.partial(Handler, directory=DIR)
     with socketserver.ThreadingTCPServer((host, port), handler) as httpd:
+        keep_alive()
+        notify_loop()
         print("Portföy sunucusu: port %d" % port)
         httpd.serve_forever()

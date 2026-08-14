@@ -375,6 +375,116 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     .drawer{padding-bottom:env(safe-area-inset-bottom);}
   }
 
+  /* ===== Ekranlar + alt menü ===== */
+  .shell, .screen { padding-bottom:70px; }
+  .screen { display:none; min-height:100vh; flex-direction:column; }
+  body.scr-analysis .shell { display:none; }
+  body.scr-analysis #screenAnalysis { display:flex; }
+  .tabbar { position:fixed; left:0; right:0; bottom:0; z-index:45; display:flex;
+    background:rgba(6,8,11,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+    border-top:1px solid var(--border); padding-bottom:env(safe-area-inset-bottom); }
+  .tab { flex:1; background:none; border:none; padding:9px 4px 10px; display:flex; flex-direction:column;
+    align-items:center; gap:3px; color:var(--faint); }
+  .tab .ti { font-size:1.05rem; line-height:1; }
+  .tab .tl { font-size:0.6rem; letter-spacing:0.08em; text-transform:uppercase; font-weight:700; }
+  .tab.on { color:var(--accent); }
+  .tab:active { transform:scale(0.93); }
+
+  .an-header { background:var(--bg); border-bottom:none; padding:14px 22px 6px; }
+  .an-search { padding:6px 22px 14px; background:var(--bg); border-bottom:1px solid var(--border); }
+  .an-srow { display:flex; gap:8px; }
+  #anQuery { flex:1; padding:11px 13px; border-radius:12px; border:1px solid var(--border-strong);
+    background:var(--panel); color:var(--ink); font-size:0.9rem; }
+  #anQuery::placeholder { color:var(--faint); }
+  .an-results { margin-top:8px; display:flex; flex-direction:column; gap:1px; background:var(--border);
+    border:1px solid var(--border); border-radius:11px; overflow:hidden; }
+  .an-results:empty { display:none; }
+  .an-item { background:var(--panel); padding:10px 12px; display:flex; justify-content:space-between;
+    align-items:center; gap:10px; border:none; text-align:left; width:100%; color:var(--ink); cursor:pointer; }
+  .an-item:hover { background:var(--row-hover); }
+  .an-item .ai-n { font-size:0.8rem; font-weight:600; }
+  .an-item .ai-e { font-size:0.64rem; color:var(--faint); }
+  .an-item .ai-s { font-family:var(--font-mono); font-size:0.74rem; color:var(--accent); font-weight:700; }
+  .an-quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:9px; }
+  .an-quick button { padding:5px 11px; border-radius:999px; border:1px solid var(--border);
+    background:var(--panel); color:var(--muted); font-size:0.7rem; font-weight:600; }
+  .an-quick button:hover { border-color:var(--accent-dim); color:var(--ink); }
+  .an-body { flex:1; overflow-y:auto; padding:16px 22px 24px; }
+  .an-empty { color:var(--faint); font-size:0.8rem; text-align:center; padding:40px 10px; line-height:1.7; }
+
+  .interp { background:var(--panel); border:1px solid var(--accent-dim); border-radius:14px;
+    padding:14px 16px; font-size:0.82rem; line-height:1.75; color:var(--ink);
+    background:linear-gradient(180deg,var(--panel),rgba(226,180,95,.05)); }
+  .interp b { color:var(--accent); }
+  .interp i { color:var(--faint); font-size:0.72rem; }
+
+  /* CAN SLIM karne */
+  .cs-top { display:flex; align-items:center; gap:16px; background:var(--panel); border:1px solid var(--border);
+    border-radius:16px; padding:16px 18px; margin-bottom:14px; }
+  .cs-grade { width:64px; height:64px; border-radius:16px; display:flex; align-items:center; justify-content:center;
+    font-size:1.9rem; font-weight:800; flex:none; }
+  .cs-grade.g-A { background:var(--pos-bg); color:var(--pos); box-shadow:0 0 22px rgba(55,211,133,.2); }
+  .cs-grade.g-B { background:rgba(120,200,120,.14); color:#7bd88f; }
+  .cs-grade.g-C { background:rgba(230,180,95,.14); color:var(--accent); }
+  .cs-grade.g-D { background:rgba(244,140,92,.14); color:#f4a06c; }
+  .cs-grade.g-E { background:var(--neg-bg); color:var(--neg); }
+  .cs-info { flex:1; min-width:0; }
+  .cs-info .cn { font-size:1rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cs-info .cm { font-size:0.66rem; color:var(--faint); letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; }
+  .cs-info .cp { font-family:var(--font-mono); font-size:0.8rem; color:var(--muted); margin-top:5px; }
+  .cs-meter { height:6px; border-radius:3px; background:var(--panel-2); overflow:hidden; margin-top:7px; }
+  .cs-meter span { display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--pos)); }
+
+  .cs-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:9px; }
+  .cs-row { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:11px 13px;
+    display:flex; align-items:flex-start; gap:11px; }
+  .cs-row.ok { border-color:rgba(55,211,133,.35); }
+  .cs-row.no { opacity:.72; }
+  .cs-badge { width:26px; height:26px; border-radius:8px; flex:none; display:flex; align-items:center;
+    justify-content:center; font-weight:800; font-size:0.8rem; }
+  .cs-badge.ok { background:var(--pos-bg); color:var(--pos); }
+  .cs-badge.part { background:rgba(230,180,95,.16); color:var(--accent); }
+  .cs-badge.no { background:var(--panel-2); color:var(--faint); }
+  .cs-txt { flex:1; min-width:0; }
+  .cs-txt .cl { font-size:0.78rem; font-weight:600; }
+  .cs-txt .cv { font-family:var(--font-mono); font-size:0.72rem; color:var(--muted); margin-top:3px; }
+  .cs-txt .ct { font-size:0.63rem; color:var(--faint); margin-top:2px; }
+
+  /* Temel analiz sekmeleri + tablo */
+  .fa-tabs { display:flex; gap:5px; margin:18px 0 11px; overflow-x:auto; scrollbar-width:none; }
+  .fa-tabs::-webkit-scrollbar { display:none; }
+  .fa-tabs button { flex:none; padding:7px 13px; border-radius:10px; border:1px solid var(--border);
+    background:var(--panel); color:var(--muted); font-size:0.72rem; font-weight:700; }
+  .fa-tabs button.on { background:var(--accent); border-color:var(--accent); color:#191307; }
+  .fa-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--border);
+    border-radius:12px; background:var(--panel); }
+  table.fa { border-collapse:collapse; width:100%; min-width:420px; }
+  table.fa th, table.fa td { padding:9px 11px; font-size:0.74rem; white-space:nowrap;
+    border-bottom:1px solid var(--border); text-align:right; font-family:var(--font-mono);
+    font-variant-numeric:tabular-nums; }
+  table.fa th { color:var(--muted); font-size:0.6rem; letter-spacing:0.07em; text-transform:uppercase;
+    font-family:var(--font-sans); font-weight:700; background:var(--panel-2); }
+  table.fa th:first-child, table.fa td:first-child { text-align:left; font-family:var(--font-sans);
+    position:sticky; left:0; background:var(--panel); font-weight:600; }
+  table.fa th:first-child { background:var(--panel-2); }
+  table.fa tr:last-child td { border-bottom:none; }
+  .fa-note { font-size:0.64rem; color:var(--faint); margin-top:8px; }
+  .fa-prof { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:13px 15px; }
+  .fa-prof .fp-r { display:flex; gap:10px; font-size:0.75rem; padding:4px 0; }
+  .fa-prof .fp-r span:first-child { color:var(--faint); min-width:92px; }
+  .fa-prof .fp-s { font-size:0.76rem; color:var(--muted); line-height:1.55; margin-top:9px;
+    padding-top:9px; border-top:1px solid var(--border); }
+  .fa-load { color:var(--faint); font-size:0.8rem; padding:26px 4px; text-align:center; }
+
+  @media (max-width:600px){
+    .an-header { padding:12px 14px 4px; }
+    .an-search { padding:4px 14px 12px; }
+    .an-body { padding:14px 14px 20px; }
+    .cs-list { grid-template-columns:1fr; }
+    .cs-top { padding:14px; gap:13px; }
+    .cs-grade { width:56px; height:56px; font-size:1.6rem; }
+  }
+
   /* Yaklaşan olaylar */
   .evt { background:var(--panel); border-bottom:1px solid var(--border); padding:12px 22px 14px; }
   .evt-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
@@ -520,6 +630,29 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     <div class="empty" id="emptyState" style="display:none;"></div>
   </div>
 </div>
+
+<!-- ANALİZ EKRANI -->
+<div class="screen" id="screenAnalysis">
+  <header class="an-header">
+    <div class="brand"><span class="mark"></span><h1 id="anTitle">Analiz</h1></div>
+  </header>
+  <div class="an-search">
+    <div class="an-srow">
+      <input id="anQuery" type="text" autocomplete="off" />
+      <button class="btn primary" id="anGo"></button>
+    </div>
+    <div class="an-results" id="anResults"></div>
+    <div class="an-quick" id="anQuick"></div>
+  </div>
+  <div class="an-body" id="anBody"></div>
+</div>
+
+<!-- ALT MENÜ -->
+<nav class="tabbar" id="tabbar">
+  <button class="tab on" data-screen="portfolio"><span class="ti">◈</span><span class="tl" data-t="navPortfolio"></span></button>
+  <button class="tab" data-screen="analysis"><span class="ti">🔬</span><span class="tl" data-t="navAnalysis"></span></button>
+</nav>
+
 <div class="overlay" id="overlay"></div>
 <aside class="drawer" id="drawer" aria-hidden="true"></aside>
 <div class="modal" id="modal" aria-hidden="true">
@@ -544,6 +677,8 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     tr:{ tag:'Canlı', connecting:'Bağlanıyor…', liveCount:'{n} canlı', ago:'{t} önce', never:'—',
       kTotal:'Toplam', kLive:'Canlı', kUp:'Günü +', kDown:'Günü −',
       auto:'Oto-yenile', refresh:'↻ Yenile', add:'Ekle',
+      interpTitle:'Son Çeyrek Yorumu',
+      navPortfolio:'Portföy', navAnalysis:'Analiz', anPh:'Şirket ara: Volvo, Apple, Aselsan…', anIntro:'Yukarıdan bir şirket arayın.<br>CAN SLIM karnesi ve mali tabloları görün.', anLoading:'Analiz ediliyor…', anNoData:'Bu varlık için temel veri yok (fon/ETF olabilir).', csScore:'Karnesi', csTarget:'Hedef', csVol:'hacim', csHolders:'kurum', csAboveMa:'200g üstünde', cs_C:'Son çeyrek kâr büyümesi', cs_A:'Yıllık kâr büyümesi + ROE', cs_N:'Zirveye yakınlık', cs_S:'Hisse arzı & hacim', cs_L:'Piyasa lideri mi', cs_I:'Kurumsal sahiplik', cs_M:'Genel piyasa yönü', csDisc:'⚠️ CAN SLIM, William O\'Neil\'in metodolojisidir. Bu karne bilgi amaçlıdır; yatırım tavsiyesi değildir.', faInc:'Gelir Tablosu', faBal:'Bilanço', faCf:'Nakit Akışı', faEarn:'Kâr Geçmişi', faProf:'Profil', faQ:'Çeyreklik', faY:'Yıllık', faItem:'Kalem', faQuarter:'Çeyrek', faEst:'Beklenti', faAct:'Gerçekleşen', faSurprise:'Sürpriz', faEarnNote:'Beklenti = analist tahmini, Gerçekleşen = açıklanan EPS.', faUnit:'Tutarlar {c} cinsindendir.', fiRev:'Ciro', fiGross:'Brüt Kâr', fiOp:'Faaliyet Kârı', fiNet:'Net Kâr', fiAssets:'Toplam Varlık', fiLiab:'Toplam Borç', fiEquity:'Özkaynak', fiCash:'Nakit', fiDebt:'Uzun Vadeli Borç', fiOpCf:'Faaliyet Nakit Akışı', fiCapex:'Yatırım Harcaması', fiDiv:'Ödenen Temettü', fpSector:'Sektör', fpIndustry:'Endüstri', fpEmployees:'Çalışan', fpCountry:'Ülke', fpCap:'Piyasa Değeri', fpWeb:'Web', 
       ppTitle:'Toplam Değer', today:'bugün', pDay:'Gün', pWeek:'Hafta', pMonth:'Ay', pYear:'Yıl', grpLabel:'🌍 Ülke', grpOff:'☰ Liste', swingBtn:'🎯 Swing', hideVals:'Değerleri gizle/göster', distBtn:'📊 Dağılım', distTitle:'Portföy Dağılımı', distType:'Tür', distSector:'Sektör', evTitle:'Yaklaşan Olaylar', evEarn:'Bilanço', evDiv:'Temettü ödemesi', evExDiv:'Temettü son gün', evToday:'BUGÜN', evTomorrow:'yarın', evInDays:'{n} gün', evOn:'Bildirim açık', evOff:'Bildirim kapalı', evNoSupport:'Bu tarayıcı bildirim desteklemiyor.', evIosHint:'iPhone\'da bildirim için: paylaş menüsünden "Ana Ekrana Ekle" yapın, sonra o ikondan açıp tekrar deneyin.', evDenied:'Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.',
       chartTitle:'Grafik', r_1mo:'1A', r_3mo:'3A', r_6mo:'6A', r_1y:'1Y',
       swingTitle:'Swing Uygunluğu', swingFit:'uygun',
@@ -587,6 +722,8 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     en:{ tag:'Live', connecting:'Connecting…', liveCount:'{n} live', ago:'{t} ago', never:'—',
       kTotal:'Total', kLive:'Live', kUp:'Day +', kDown:'Day −',
       auto:'Auto', refresh:'↻ Refresh', add:'Add',
+      interpTitle:'Latest Quarter Review',
+      navPortfolio:'Portfolio', navAnalysis:'Analysis', anPh:'Search company: Volvo, Apple…', anIntro:'Search a company above.<br>See its CAN SLIM scorecard and financials.', anLoading:'Analyzing…', anNoData:'No fundamental data (may be a fund/ETF).', csScore:'Scorecard', csTarget:'Target', csVol:'volume', csHolders:'holders', csAboveMa:'above 200d', cs_C:'Current quarterly earnings', cs_A:'Annual growth + ROE', cs_N:'Near new high', cs_S:'Share supply & volume', cs_L:'Market leader', cs_I:'Institutional ownership', cs_M:'Market direction', csDisc:'⚠️ CAN SLIM is William O\'Neil\'s methodology. Informational only; not investment advice.', faInc:'Income', faBal:'Balance Sheet', faCf:'Cash Flow', faEarn:'Earnings', faProf:'Profile', faQ:'Quarterly', faY:'Annual', faItem:'Item', faQuarter:'Quarter', faEst:'Estimate', faAct:'Actual', faSurprise:'Surprise', faEarnNote:'Estimate = analyst consensus, Actual = reported EPS.', faUnit:'Figures in {c}.', fiRev:'Revenue', fiGross:'Gross Profit', fiOp:'Operating Income', fiNet:'Net Income', fiAssets:'Total Assets', fiLiab:'Total Liabilities', fiEquity:'Equity', fiCash:'Cash', fiDebt:'Long-term Debt', fiOpCf:'Operating Cash Flow', fiCapex:'CapEx', fiDiv:'Dividends Paid', fpSector:'Sector', fpIndustry:'Industry', fpEmployees:'Employees', fpCountry:'Country', fpCap:'Market Cap', fpWeb:'Web', 
       ppTitle:'Total Value', today:'today', pDay:'Day', pWeek:'Week', pMonth:'Month', pYear:'Year', grpLabel:'🌍 Country', grpOff:'☰ List', swingBtn:'🎯 Swing', hideVals:'Hide/show values', distBtn:'📊 Allocation', distTitle:'Portfolio Allocation', distType:'Type', distSector:'Sector', evTitle:'Upcoming Events', evEarn:'Earnings', evDiv:'Dividend payment', evExDiv:'Ex-dividend', evToday:'TODAY', evTomorrow:'tomorrow', evInDays:'in {n}d', evOn:'Alerts on', evOff:'Alerts off', evNoSupport:'This browser does not support notifications.', evIosHint:'On iPhone: use Share > "Add to Home Screen", open from that icon, then try again.', evDenied:'Notification permission denied. Enable it in settings.',
       chartTitle:'Chart', r_1mo:'1M', r_3mo:'3M', r_6mo:'6M', r_1y:'1Y',
       swingTitle:'Swing Fit', swingFit:'fit',
@@ -630,6 +767,8 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     sv:{ tag:'Live', connecting:'Ansluter…', liveCount:'{n} live', ago:'för {t} sedan', never:'—',
       kTotal:'Totalt', kLive:'Live', kUp:'Dag +', kDown:'Dag −',
       auto:'Auto', refresh:'↻ Uppdatera', add:'Lägg till',
+      interpTitle:'Senaste Kvartalet',
+      navPortfolio:'Portfölj', navAnalysis:'Analys', anPh:'Sök bolag: Volvo, Apple…', anIntro:'Sök ett bolag ovan.<br>Se dess CAN SLIM-betyg och rapporter.', anLoading:'Analyserar…', anNoData:'Ingen fundamental data (kan vara fond/ETF).', csScore:'Betyg', csTarget:'Mål', csVol:'volym', csHolders:'institut', csAboveMa:'över 200d', cs_C:'Kvartalsvinst tillväxt', cs_A:'Årlig tillväxt + ROE', cs_N:'Nära ny topp', cs_S:'Aktieutbud & volym', cs_L:'Marknadsledare', cs_I:'Institutionellt ägande', cs_M:'Marknadsriktning', csDisc:'⚠️ CAN SLIM är William O\'Neils metodik. Endast information; inte investeringsråd.', faInc:'Resultat', faBal:'Balans', faCf:'Kassaflöde', faEarn:'Vinsthistorik', faProf:'Profil', faQ:'Kvartal', faY:'År', faItem:'Post', faQuarter:'Kvartal', faEst:'Estimat', faAct:'Utfall', faSurprise:'Överraskning', faEarnNote:'Estimat = analytikerkonsensus, Utfall = rapporterad EPS.', faUnit:'Belopp i {c}.', fiRev:'Intäkter', fiGross:'Bruttovinst', fiOp:'Rörelseresultat', fiNet:'Nettovinst', fiAssets:'Totala Tillgångar', fiLiab:'Totala Skulder', fiEquity:'Eget Kapital', fiCash:'Kassa', fiDebt:'Långfristig Skuld', fiOpCf:'Operativt Kassaflöde', fiCapex:'Investeringar', fiDiv:'Utdelningar', fpSector:'Sektor', fpIndustry:'Bransch', fpEmployees:'Anställda', fpCountry:'Land', fpCap:'Börsvärde', fpWeb:'Webb', 
       ppTitle:'Totalt Värde', today:'idag', pDay:'Dag', pWeek:'Vecka', pMonth:'Månad', pYear:'År', grpLabel:'🌍 Land', grpOff:'☰ Lista', swingBtn:'🎯 Swing', hideVals:'Dölj/visa värden', distBtn:'📊 Fördelning', distTitle:'Portföljfördelning', distType:'Typ', distSector:'Sektor', evTitle:'Kommande Händelser', evEarn:'Rapport', evDiv:'Utdelning', evExDiv:'X-dag utdelning', evToday:'IDAG', evTomorrow:'imorgon', evInDays:'om {n}d', evOn:'Aviseringar på', evOff:'Aviseringar av', evNoSupport:'Webbläsaren stöder inte aviseringar.', evIosHint:'På iPhone: Dela > "Lägg till på hemskärmen", öppna från ikonen och försök igen.', evDenied:'Avisering nekad. Aktivera i inställningar.',
       chartTitle:'Diagram', r_1mo:'1M', r_3mo:'3M', r_6mo:'6M', r_1y:'1Å',
       swingTitle:'Swing-lämplighet', swingFit:'lämplig',
@@ -1069,6 +1208,9 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     var gb=document.getElementById('groupBtn'); gb.textContent=state.groupBy==='country'?t('grpOff'):t('grpLabel'); gb.classList.toggle('on',state.groupBy==='country');
     var sb=document.getElementById('swingBtn'); sb.textContent=t('swingBtn'); sb.classList.toggle('on',state.swingOnly);
     var db=document.getElementById('distBtn'); db.textContent=t('distBtn'); db.classList.toggle('on',state.distOpen);
+    var aq=document.getElementById('anQuery'); if(aq) aq.placeholder=t('anPh');
+    var ag=document.getElementById('anGo'); if(ag) ag.textContent=t('ssBtn');
+    var at=document.getElementById('anTitle'); if(at) at.textContent=t('navAnalysis');
     document.querySelectorAll('#langsel button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-lang')===lang); });
     document.documentElement.setAttribute('lang',lang);
   }
@@ -1225,7 +1367,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   function removeCompany(k){ delete state.companies[k]; persist(); closeDrawer(); render(); }
   function toggleTheme(){ var cur=document.documentElement.getAttribute('data-theme'); if(!cur){ var d=window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches; document.documentElement.setAttribute('data-theme',d?'dark':'light'); } else document.documentElement.setAttribute('data-theme',cur==='dark'?'light':'dark'); }
   function setAuto(on){ if(state.autoTimer){clearInterval(state.autoTimer);state.autoTimer=null;} if(on) state.autoTimer=setInterval(refreshPrices,60000); }
-  function setLang(l){ lang=l; try{localStorage.setItem('portfoyLang',l);}catch(e){} render(); if(currentDrawerKey) openDrawer(currentDrawerKey); }
+  function setLang(l){ lang=l; try{localStorage.setItem('portfoyLang',l);}catch(e){} render(); renderAnalysis(); renderAnQuick(); if(currentDrawerKey) openDrawer(currentDrawerKey); }
 
   document.getElementById('search').addEventListener('input',function(e){ state.search=e.target.value; renderBody(); });
   document.getElementById('typesel').addEventListener('click',function(e){ var b=e.target.closest('[data-type]'); if(!b) return; state.typeF=b.getAttribute('data-type'); state.sector='all'; render(); });
@@ -1257,6 +1399,159 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   document.getElementById('portPanel').addEventListener('click',function(e){ var b=e.target.closest('[data-ccy]'); if(b){ setCcy(b.getAttribute('data-ccy')); return; } var eb=e.target.closest('[data-eye]'); if(eb){ state.hideValues=!state.hideValues; try{localStorage.setItem('portfoyHide',state.hideValues?'1':'0');}catch(e2){} renderPanel(); renderBody(); if(currentDrawerKey) openDrawer(currentDrawerKey); } });
   document.addEventListener('keydown',function(e){ if(e.key==='Escape'){closeModal();closeDrawer();} });
 
+  // ================= ANALİZ EKRANI =================
+  var AN={ sym:null, name:null, fund:null, cs:null, tab:'inc', period:'quarterly' };
+  function switchScreen(name){
+    document.body.classList.toggle('scr-analysis', name==='analysis');
+    Array.prototype.forEach.call(document.querySelectorAll('#tabbar .tab'), function(b){
+      b.classList.toggle('on', b.getAttribute('data-screen')===name); });
+    window.scrollTo(0,0);
+  }
+  function bigNum(v,cur){
+    if(v==null||isNaN(v)) return '—';
+    var neg=v<0; v=Math.abs(v); var s;
+    if(v>=1e12) s=(v/1e12).toFixed(2)+'T'; else if(v>=1e9) s=(v/1e9).toFixed(2)+'B';
+    else if(v>=1e6) s=(v/1e6).toFixed(1)+'M'; else if(v>=1e3) s=(v/1e3).toFixed(0)+'K';
+    else s=v.toFixed(0);
+    return (neg?'-':'')+s+(cur?' '+cur:'');
+  }
+  function pctTxt(v,d){ if(v==null||isNaN(v)) return '—'; return (v>=0?'+':'')+v.toFixed(d==null?1:d)+'%'; }
+  function anSearchDo(){
+    var q=document.getElementById('anQuery').value.trim(); var box=document.getElementById('anResults');
+    if(!q){ box.innerHTML=''; return; }
+    box.innerHTML='<div class="an-item"><span class="ai-n">'+t('ssSearching')+'</span></div>';
+    fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
+      var items=(d&&d.items)||[];
+      if(!items.length){ box.innerHTML='<div class="an-item"><span class="ai-n">'+t('ssNone')+'</span></div>'; return; }
+      box.innerHTML=items.slice(0,7).map(function(it){
+        return '<button class="an-item" data-pick="'+esc(it.symbol)+'" data-nm="'+esc(it.name||'')+'">'+
+          '<span><span class="ai-n">'+esc(it.name||it.symbol)+'</span> <span class="ai-e">'+esc(it.exchange||'')+'</span></span>'+
+          '<span class="ai-s">'+esc(it.symbol)+'</span></button>'; }).join('');
+    }).catch(function(){ box.innerHTML=''; });
+  }
+  function anPick(sym,name){
+    AN.sym=sym; AN.name=name||sym; AN.fund=null; AN.cs=null;
+    document.getElementById('anResults').innerHTML='';
+    document.getElementById('anQuery').value='';
+    document.getElementById('anBody').innerHTML='<div class="fa-load">'+t('anLoading')+'</div>';
+    Promise.all([
+      fetch('/api/canslim?symbol='+encodeURIComponent(sym)).then(function(r){return r.json();}).catch(function(){return null;}),
+      fetch('/api/fundamentals?symbol='+encodeURIComponent(sym)).then(function(r){return r.json();}).catch(function(){return null;})
+    ]).then(function(res){
+      if(AN.sym!==sym) return;
+      AN.cs=(res[0]&&res[0].ok)?res[0]:null; AN.fund=(res[1]&&res[1].ok)?res[1]:null;
+      renderAnalysis();
+      fetch('/api/interpret?symbol='+encodeURIComponent(sym)).then(function(r){return r.json();}).then(function(ip){
+        if(AN.sym!==sym) return; var box=document.getElementById('anInterp'); if(!box||!ip||!ip.text) return;
+        box.innerHTML='<div class="sec-title" style="margin-top:20px">'+t('interpTitle')+'</div>'+
+          '<div class="interp">'+ip.text.replace(/\n/g,'<br>')+'</div>';
+      }).catch(function(){});
+    });
+  }
+  function csLabel(code){ return t('cs_'+code); }
+  function csValueText(c){
+    var v=c.value, u=c.unit, ex=c.extra||{};
+    if(c.code==='S') return (v!=null? bigNum(v,'') : '—')+(ex.volRatio!=null? ' · '+t('csVol')+' '+ex.volRatio.toFixed(2)+'×':'');
+    if(c.code==='A') return pctTxt(v)+(ex.roe!=null? ' · ROE '+ex.roe.toFixed(1)+'%':'');
+    if(c.code==='L') return pctTxt(v)+(ex.stock!=null? ' ('+pctTxt(ex.stock,0)+' vs '+pctTxt(ex.index,0)+')':'');
+    if(c.code==='I') return (v!=null?v.toFixed(1)+'%':'—')+(ex.holders?' · '+ex.holders+' '+t('csHolders'):'');
+    if(c.code==='M') return (v!=null? t('csAboveMa')+' '+pctTxt(v):'—');
+    if(c.code==='N') return v!=null? v.toFixed(0)+'%':'—';
+    return (v!=null? v.toFixed(1)+(u==='%'?'%':''):'—');
+  }
+  function renderAnalysis(){
+    var el=document.getElementById('anBody'); if(!el) return;
+    if(!AN.sym){ el.innerHTML='<div class="an-empty">'+t('anIntro')+'</div>'; return; }
+    var html='';
+    if(AN.cs){
+      var d=AN.cs;
+      html+='<div class="cs-top"><div class="cs-grade g-'+d.grade+'">'+d.grade+'</div>'+
+        '<div class="cs-info"><div class="cn">'+esc(d.name||AN.name)+'</div>'+
+        '<div class="cm">CAN SLIM '+t('csScore')+'</div>'+
+        '<div class="cp">'+d.score+' / '+d.max+' · %'+d.pct.toFixed(0)+'</div>'+
+        '<div class="cs-meter"><span style="width:'+d.pct.toFixed(0)+'%"></span></div></div></div>';
+      html+='<div class="cs-list">'+d.criteria.map(function(c){
+        var st=c.pass?'ok':(c.partial?'part':'no');
+        return '<div class="cs-row '+(c.pass?'ok':(c.partial?'':'no'))+'">'+
+          '<span class="cs-badge '+st+'">'+c.code+'</span>'+
+          '<span class="cs-txt"><span class="cl">'+csLabel(c.code)+'</span>'+
+          '<div class="cv">'+csValueText(c)+'</div>'+
+          '<div class="ct">'+t('csTarget')+': '+esc(c.target)+'</div></span></div>'; }).join('')+'</div>';
+      html+='<div class="disclaimer" style="margin-top:12px">'+t('csDisc')+'</div>';
+      html+='<div id="anInterp"></div>';
+    } else {
+      html+='<div class="an-empty">'+t('anNoData')+'</div>';
+    }
+    if(AN.fund){
+      var tabs=[['inc','faInc'],['bal','faBal'],['cf','faCf'],['earn','faEarn'],['prof','faProf']];
+      html+='<div class="fa-tabs">'+tabs.map(function(p){
+        return '<button data-fa="'+p[0]+'" class="'+(AN.tab===p[0]?'on':'')+'">'+t(p[1])+'</button>'; }).join('')+'</div>';
+      html+=renderFaBody();
+    }
+    el.innerHTML=html;
+  }
+  function renderFaBody(){
+    var f=AN.fund; if(!f) return '';
+    var cur=f.currency||'';
+    if(AN.tab==='prof'){
+      var p=f.profile||{}, r=f.ratios||{};
+      function row(l,v){ return v?('<div class="fp-r"><span>'+l+'</span><span>'+esc(v)+'</span></div>'):''; }
+      return '<div class="fa-prof">'+
+        row(t('fpSector'), p.sector)+row(t('fpIndustry'), p.industry)+
+        row(t('fpEmployees'), p.employees!=null?String(p.employees):'')+
+        row(t('fpCountry'), p.country)+row(t('fpCap'), bigNum(r.marketCap,f.tradeCurrency||''))+
+        row(t('fpWeb'), p.website)+
+        (p.summary?'<div class="fp-s">'+esc(p.summary)+'</div>':'')+'</div>';
+    }
+    if(AN.tab==='earn'){
+      var eh=f.earningsHistory||[];
+      if(!eh.length) return '<div class="an-empty">'+t('anNoData')+'</div>';
+      return '<div class="fa-scroll"><table class="fa"><thead><tr><th>'+t('faQuarter')+'</th><th>'+t('faEst')+'</th><th>'+t('faAct')+'</th><th>'+t('faSurprise')+'</th></tr></thead><tbody>'+
+        eh.map(function(e){ var sp=e.surprisePct!=null?e.surprisePct*100:null;
+          var cls=sp==null?'':(sp>=0?'pos':'neg');
+          return '<tr><td>'+esc(e.quarter||'—')+'</td><td>'+(e.estimate!=null?e.estimate.toFixed(2):'—')+
+            '</td><td>'+(e.actual!=null?e.actual.toFixed(2):'—')+'</td><td class="'+cls+'">'+
+            (sp!=null?pctTxt(sp,1):'—')+'</td></tr>'; }).join('')+'</tbody></table></div>'+
+        '<div class="fa-note">'+t('faEarnNote')+'</div>';
+    }
+    var map={inc:['income',[['totalRevenue','fiRev'],['grossProfit','fiGross'],['operatingIncome','fiOp'],['netIncome','fiNet']]],
+             bal:['balance',[['totalAssets','fiAssets'],['totalLiab','fiLiab'],['totalStockholderEquity','fiEquity'],['cash','fiCash'],['longTermDebt','fiDebt']]],
+             cf:['cashflow',[['totalCashFromOperatingActivities','fiOpCf'],['capitalExpenditures','fiCapex'],['dividendsPaid','fiDiv']]]};
+    var cfg=map[AN.tab]; if(!cfg) return '';
+    var data=(f[cfg[0]]||{})[AN.period]||[];
+    if(!data.length){ data=(f[cfg[0]]||{}).annual||[]; }
+    if(!data.length) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    var head='<tr><th>'+t('faItem')+'</th>'+data.map(function(d){return '<th>'+esc((d.date||'').slice(0,7))+'</th>';}).join('')+'</tr>';
+    // Yahoo bazı alanları boş/sıfır döndürür — tamamen boş satırları gösterme
+    var body=cfg[1].filter(function(fl){
+      return data.some(function(d){ var v=d[fl[0]]; return v!=null && !isNaN(v) && v!==0; });
+    }).map(function(fl){
+      return '<tr><td>'+t(fl[1])+'</td>'+data.map(function(d){ return '<td>'+bigNum(d[fl[0]],'')+'</td>'; }).join('')+'</tr>';
+    }).join('');
+    if(!body) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    return '<div style="display:flex;gap:6px;margin-bottom:9px">'+
+        ['quarterly','annual'].map(function(p){ return '<button class="fa-per btn'+(AN.period===p?' primary':'')+'" data-per="'+p+'" style="padding:5px 11px;font-size:0.68rem">'+t(p==='quarterly'?'faQ':'faY')+'</button>'; }).join('')+'</div>'+
+      '<div class="fa-scroll"><table class="fa"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
+      '<div class="fa-note">'+t('faUnit',{c:cur})+'</div>';
+  }
+  document.getElementById('tabbar').addEventListener('click',function(e){
+    var b=e.target.closest('[data-screen]'); if(b) switchScreen(b.getAttribute('data-screen')); });
+  document.getElementById('anGo').addEventListener('click',anSearchDo);
+  document.getElementById('anQuery').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); anSearchDo(); } });
+  document.getElementById('anResults').addEventListener('click',function(e){
+    var b=e.target.closest('[data-pick]'); if(b) anPick(b.getAttribute('data-pick'), b.getAttribute('data-nm')); });
+  document.getElementById('anQuick').addEventListener('click',function(e){
+    var b=e.target.closest('[data-qs]'); if(b) anPick(b.getAttribute('data-qs'), b.getAttribute('data-qn')); });
+  document.getElementById('anBody').addEventListener('click',function(e){
+    var t1=e.target.closest('[data-fa]'); if(t1){ AN.tab=t1.getAttribute('data-fa'); renderAnalysis(); return; }
+    var t2=e.target.closest('[data-per]'); if(t2){ AN.period=t2.getAttribute('data-per'); renderAnalysis(); } });
+  function renderAnQuick(){
+    var el=document.getElementById('anQuick'); if(!el) return;
+    var ks=Object.keys(state.companies).filter(function(k){ var c=state.companies[k]; return c.type==='stock'&&c.ysym; }).slice(0,6);
+    el.innerHTML=ks.map(function(k){ var c=state.companies[k];
+      return '<button data-qs="'+esc(c.ysym)+'" data-qn="'+esc(c.name)+'">'+esc(c.name)+'</button>'; }).join('');
+  }
+
   // Açılış ekranı: ilk fiyatlar gelince ya da en geç 6 sn sonra kapan
   var splashDone=false;
   function hideSplash(){ if(splashDone) return; splashDone=true;
@@ -1273,7 +1568,12 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     setTimeout(function(){ clearInterval(iv); hideSplash(); }, 6000);
   })();
 
-  render(); loadFx(); refreshAll();
+  render(); renderAnalysis(); renderAnQuick(); loadFx(); refreshAll();
+  // Bildirim takibi için sembolleri sunucuya bildir
+  setTimeout(function(){ try{
+    var syms=Object.keys(state.companies).filter(function(k){var c=state.companies[k];return c.ysym&&c.type==='stock';}).map(function(k){return state.companies[k].ysym;});
+    if(syms.length) fetch('/api/watch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbols:syms})}).catch(function(){});
+  }catch(e){} }, 12000);
   setTimeout(notifyDue, 9000);                 // açılışta bir kez kontrol
   setInterval(notifyDue, 30*60*1000);          // sonra yarım saatte bir
 })();
