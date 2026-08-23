@@ -189,6 +189,62 @@ def _rows(items, fields):
         out.append(row)
     return out
 
+TS_FIELDS = {
+    "balance": [("TotalAssets", "totalAssets"),
+                ("TotalLiabilitiesNetMinorityInterest", "totalLiab"),
+                ("StockholdersEquity", "totalStockholderEquity"),
+                ("CashAndCashEquivalents", "cash"),
+                ("TotalDebt", "longTermDebt")],
+    "cashflow": [("OperatingCashFlow", "totalCashFromOperatingActivities"),
+                 ("CapitalExpenditure", "capitalExpenditures"),
+                 ("FreeCashFlow", "freeCashFlow"),
+                 ("NetIncome", "netIncome")],
+    "income": [("TotalRevenue", "totalRevenue"),
+               ("CostOfRevenue", "costOfRevenue"),
+               ("GrossProfit", "grossProfit"),
+               ("OperatingIncome", "operatingIncome"),
+               ("EBITDA", "ebitda"),
+               ("NetIncome", "netIncome"),
+               ("DilutedEPS", "eps")],
+}
+
+def fetch_timeseries(sym, group, period="quarterly", limit=4):
+    """Yahoo'nun yeni fundamentals-timeseries API'si.
+    quoteSummary artık bilanço/nakit akışı vermiyor; bu uç veriyor."""
+    fields = TS_FIELDS.get(group) or []
+    if not fields:
+        return []
+    types = ",".join(period + f[0] for f in fields)
+    url = ("https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/%s"
+           "?symbol=%s&type=%s&period1=1451606400&period2=%d&merge=false"
+           % (urllib.parse.quote(sym), urllib.parse.quote(sym), types, int(time.time())))
+    try:
+        d = json.load(_open(url))
+    except Exception:
+        return []
+    by_date = {}
+    for res in (d.get("timeseries", {}) or {}).get("result", []) or []:
+        tp = ((res.get("meta") or {}).get("type") or [None])[0]
+        if not tp:
+            continue
+        out_key = None
+        for src, dst in fields:
+            if tp == period + src:
+                out_key = dst
+                break
+        if not out_key:
+            continue
+        for pt in (res.get(tp) or []):
+            if not pt:
+                continue
+            day = pt.get("asOfDate")
+            val = (pt.get("reportedValue") or {}).get("raw")
+            if day is None or val is None:
+                continue
+            by_date.setdefault(day, {"date": day})[out_key] = val
+    rows = sorted(by_date.values(), key=lambda r: r["date"], reverse=True)
+    return rows[:limit]
+
 def fetch_fundamentals(sym):
     """Temel analiz: gelir tablosu, bilanço, nakit akışı (yıllık+çeyreklik), kâr geçmişi, profil."""
     crumb = get_crumb()
@@ -224,12 +280,19 @@ def fetch_fundamentals(sym):
     CF = ["totalCashFromOperatingActivities", "capitalExpenditures", "netIncome",
           "dividendsPaid", "repurchaseOfStock"]
 
-    inc_a = _rows((r.get("incomeStatementHistory") or {}).get("incomeStatementHistory"), INC)
-    inc_q = _rows((r.get("incomeStatementHistoryQuarterly") or {}).get("incomeStatementHistory"), INC)
-    bal_a = _rows((r.get("balanceSheetHistory") or {}).get("balanceSheetStatements"), BAL)
-    bal_q = _rows((r.get("balanceSheetHistoryQuarterly") or {}).get("balanceSheetStatements"), BAL)
-    cf_a = _rows((r.get("cashflowStatementHistory") or {}).get("cashflowStatements"), CF)
-    cf_q = _rows((r.get("cashflowStatementHistoryQuarterly") or {}).get("cashflowStatements"), CF)
+    # Gelir tablosu quoteSummary'de dolu geliyor; bilanço/nakit akışı ise BOŞ dönüyor
+    # (Yahoo kaldırdı) -> onları yeni timeseries API'sinden çekiyoruz.
+    # quoteSummary gelir tablosunda eksikler var -> doğrudan timeseries kullan
+    inc_q = fetch_timeseries(sym, "income", "quarterly")
+    inc_a = fetch_timeseries(sym, "income", "annual")
+    if not inc_q:
+        inc_q = _rows((r.get("incomeStatementHistoryQuarterly") or {}).get("incomeStatementHistory"), INC)
+    if not inc_a:
+        inc_a = _rows((r.get("incomeStatementHistory") or {}).get("incomeStatementHistory"), INC)
+    bal_q = fetch_timeseries(sym, "balance", "quarterly")
+    bal_a = fetch_timeseries(sym, "balance", "annual")
+    cf_q = fetch_timeseries(sym, "cashflow", "quarterly")
+    cf_a = fetch_timeseries(sym, "cashflow", "annual")
 
     earn = []
     for h in ((r.get("earningsHistory") or {}).get("history") or []):
@@ -274,6 +337,170 @@ def fetch_fundamentals(sym):
                        "dividendYield": _raw(sd.get("dividendYield")),
                        "payoutRatio": _raw(sd.get("payoutRatio")),
                        "marketCap": _raw(pr.get("marketCap")) or _raw(sd.get("marketCap"))}}
+
+def fetch_valuation(sym):
+    """Değerleme: bugünkü F/K, PD/DD, FD/FAVÖK — kendi geçmişiyle kıyaslanır."""
+    types = ",".join(["quarterlyPeRatio", "quarterlyPbRatio", "quarterlyEnterprisesValueEBITDARatio",
+                      "annualPeRatio", "annualPbRatio", "annualEnterprisesValueEBITDARatio"])
+    url = ("https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/%s"
+           "?symbol=%s&type=%s&period1=1420070400&period2=%d&merge=false"
+           % (urllib.parse.quote(sym), urllib.parse.quote(sym), types, int(time.time())))
+    series = {}
+    try:
+        d = json.load(_open(url))
+        for res in (d.get("timeseries", {}) or {}).get("result", []) or []:
+            tp = ((res.get("meta") or {}).get("type") or [None])[0]
+            if not tp:
+                continue
+            vals = []
+            for pt in (res.get(tp) or []):
+                if not pt:
+                    continue
+                v = (pt.get("reportedValue") or {}).get("raw")
+                if v is not None:
+                    vals.append({"date": pt.get("asOfDate"), "v": v})
+            if vals:
+                series[tp] = sorted(vals, key=lambda x: x["date"])
+    except Exception:
+        pass
+
+    def metric(name):
+        hist = (series.get("annual" + name) or []) + (series.get("quarterly" + name) or [])
+        hist = sorted({h["date"]: h for h in hist}.values(), key=lambda x: x["date"])
+        if not hist:
+            return None
+        raw_vals = [h["v"] for h in hist if h["v"] and h["v"] > 0]
+        if not raw_vals:
+            return None
+        cur = raw_vals[-1]
+        # Kâr sıfıra yaklaşınca F/K uçuk değerler alır (ör. 800) ve ortalamayı bozar.
+        # Aykırı değerleri ele: medyanın 3 katından büyükleri at, ORTALAMA yerine MEDYAN kullan.
+        srt = sorted(raw_vals)
+        med = srt[len(srt) // 2] if len(srt) % 2 else (srt[len(srt) // 2 - 1] + srt[len(srt) // 2]) / 2.0
+        vals = [v for v in raw_vals if v <= max(med * 3.0, 1e-9)] or raw_vals
+        srt2 = sorted(vals)
+        typical = srt2[len(srt2) // 2] if len(srt2) % 2 else (srt2[len(srt2) // 2 - 1] + srt2[len(srt2) // 2]) / 2.0
+        return {"current": cur, "avg": typical, "min": min(vals), "max": max(vals),
+                "n": len(vals), "outliers": len(raw_vals) - len(vals),
+                "vsAvgPct": ((cur - typical) / typical * 100) if typical else None,
+                "history": hist[-12:]}
+    return {"ok": True, "symbol": sym,
+            "pe": metric("PeRatio"), "pb": metric("PbRatio"),
+            "evEbitda": metric("EnterprisesValueEBITDARatio")}
+
+def fetch_dividends(sym):
+    """Temettü geçmişi + güvenilirlik: kaç yıldır ödüyor, artıyor mu, dağıtım oranı."""
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1mo&range=10y&events=div"
+           % urllib.parse.quote(sym))
+    try:
+        d = json.load(_open(url))
+        res = d["chart"]["result"][0]
+        ev = (res.get("events") or {}).get("dividends") or {}
+        cur = (res.get("meta") or {}).get("currency")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    items = sorted(({"date": v.get("date"), "amount": v.get("amount")}
+                    for v in ev.values() if v.get("amount")), key=lambda x: x["date"])
+    if not items:
+        return {"ok": True, "symbol": sym, "hasDividend": False, "currency": cur, "years": []}
+
+    by_year = {}
+    for it in items:
+        y = time.strftime("%Y", time.gmtime(it["date"]))
+        by_year[y] = by_year.get(y, 0) + it["amount"]
+    years = [{"year": y, "total": round(by_year[y], 4)} for y in sorted(by_year)]
+    # Bu yıl henüz tamamlanmadıysa büyüme kıyasını bozmasın
+    this_year = time.strftime("%Y")
+    full = [y for y in years if y["year"] != this_year]
+    growth_streak, cuts = 0, 0
+    for i in range(len(full) - 1, 0, -1):
+        if full[i]["total"] > full[i - 1]["total"] * 1.001:
+            growth_streak += 1
+        else:
+            break
+    for i in range(1, len(full)):
+        if full[i]["total"] < full[i - 1]["total"] * 0.999:
+            cuts += 1
+    return {"ok": True, "symbol": sym, "hasDividend": True, "currency": cur,
+            "years": years[-10:], "payingYears": len(by_year),
+            "growthStreak": growth_streak, "cuts": cuts,
+            "lastAmount": items[-1]["amount"],
+            "lastDate": time.strftime("%Y-%m-%d", time.gmtime(items[-1]["date"]))}
+
+def build_scorecard(sym):
+    """4 boyutlu karne: Değer · Büyüme · Kalite · Momentum (şeffaf kurallar)."""
+    f = fetch_fund(sym)
+    val = fetch_valuation(sym)
+    tech = fetch_tech(sym)
+    if not f.get("ok"):
+        return {"ok": False, "error": "veri yok"}
+    dims = []
+
+    # DEĞER — F/K kendi ortalamasına göre + PD/DD
+    pts, notes = 0, []
+    pe = (val.get("pe") or {})
+    if pe.get("vsAvgPct") is not None:
+        v = pe["vsAvgPct"]
+        if v <= -20: pts += 2; notes.append({"d": "pos", "k": "scCheapVsHist", "v": abs(round(v))})
+        elif v <= 0: pts += 1; notes.append({"d": "pos", "k": "scBelowHist", "v": abs(round(v))})
+        elif v >= 30: notes.append({"d": "neg", "k": "scExpensiveVsHist", "v": round(v)})
+        else: pts += 1
+    tpe = f.get("trailingPE")
+    if tpe is not None:
+        if tpe < 15: pts += 1; notes.append({"d": "pos", "k": "scLowPe", "v": round(tpe, 1)})
+        elif tpe > 35: notes.append({"d": "neg", "k": "scHighPe", "v": round(tpe, 1)})
+    dims.append({"key": "value", "score": min(pts, 3), "max": 3, "notes": notes})
+
+    # BÜYÜME — ciro + kâr
+    pts, notes = 0, []
+    rg, eg = f.get("revenueGrowth"), f.get("earningsGrowth")
+    if rg is not None:
+        if rg >= 0.15: pts += 2; notes.append({"d": "pos", "k": "scRevStrong", "v": round(rg * 100)})
+        elif rg >= 0.05: pts += 1; notes.append({"d": "pos", "k": "scRevOk", "v": round(rg * 100)})
+        elif rg < 0: notes.append({"d": "neg", "k": "scRevDown", "v": round(rg * 100)})
+    if eg is not None:
+        if eg >= 0.15: pts += 1; notes.append({"d": "pos", "k": "scEarnStrong", "v": round(eg * 100)})
+        elif eg < 0: notes.append({"d": "neg", "k": "scEarnDown", "v": round(eg * 100)})
+    dims.append({"key": "growth", "score": min(pts, 3), "max": 3, "notes": notes})
+
+    # KALİTE — marj, ROE, borç
+    pts, notes = 0, []
+    pm, roe, de = f.get("profitMargin"), f.get("roe"), f.get("debtEbitda")
+    if pm is not None:
+        if pm >= 0.15: pts += 1; notes.append({"d": "pos", "k": "scMarginGood", "v": round(pm * 100)})
+        elif pm < 0: notes.append({"d": "neg", "k": "scLoss"})
+    if roe is not None:
+        if roe >= 0.15: pts += 1; notes.append({"d": "pos", "k": "scRoeGood", "v": round(roe * 100)})
+    if de is not None:
+        if de <= 1: pts += 1; notes.append({"d": "pos", "k": "scDebtLow"})
+        elif de > 3: notes.append({"d": "neg", "k": "scDebtHigh", "v": round(de, 1)})
+    dims.append({"key": "quality", "score": min(pts, 3), "max": 3, "notes": notes})
+
+    # MOMENTUM — trend + RSI
+    pts, notes = 0, []
+    if tech.get("ok"):
+        p, m50, m200 = tech.get("price"), tech.get("ma50"), tech.get("ma200")
+        if p and m200 and p > m200: pts += 1; notes.append({"d": "pos", "k": "scAbove200"})
+        if p and m50 and p > m50: pts += 1; notes.append({"d": "pos", "k": "scAbove50"})
+        mac = tech.get("macd") or {}
+        if mac.get("hist") is not None:
+            if mac["hist"] > 0: pts += 1; notes.append({"d": "pos", "k": "scMacdUp"})
+            else: notes.append({"d": "neg", "k": "scMacdDown"})
+    dims.append({"key": "momentum", "score": min(pts, 3), "max": 3, "notes": notes})
+
+    total = sum(x["score"] for x in dims)
+    return {"ok": True, "symbol": sym, "dims": dims, "total": total, "max": 12,
+            "pct": total / 12.0 * 100}
+
+def fetch_deep(sym):
+    out = {"ok": True, "symbol": sym}
+    try: out["valuation"] = fetch_valuation(sym)
+    except Exception as e: out["valuation"] = {"ok": False, "error": str(e)}
+    try: out["dividends"] = fetch_dividends(sym)
+    except Exception as e: out["dividends"] = {"ok": False, "error": str(e)}
+    try: out["scorecard"] = build_scorecard(sym)
+    except Exception as e: out["scorecard"] = {"ok": False, "error": str(e)}
+    return out
 
 _market_cache = {"t": 0, "data": None}
 
@@ -627,6 +854,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_tech(sym))
                 if p.path == "/api/canslim":
                     return _json(self, fetch_canslim(sym))
+                if p.path == "/api/deep":
+                    return _json(self, fetch_deep(sym))
                 if p.path == "/api/fundamentals":
                     return _json(self, fetch_fundamentals(sym))
                 if p.path == "/api/hist":

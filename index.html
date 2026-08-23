@@ -231,6 +231,8 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   .pos-line .pl-unit { color:var(--muted); font-size:0.72rem; }
   .pos-input { width:82px; padding:5px 8px; border-radius:6px; border:1px solid var(--accent-dim); background:var(--panel); color:var(--ink); font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-weight:700; font-size:0.9rem; text-align:right; }
   .pos-input:focus { outline:2px solid var(--accent); outline-offset:0; }
+  .pos-share { background:var(--accent); color:#191307; font-family:var(--font-mono); font-weight:800;
+    font-size:0.7rem; padding:2px 8px; border-radius:999px; flex:none; }
   .pos-line .pos-val { margin-left:auto; font-family:var(--font-mono); font-weight:700; color:var(--accent); }
   .analyst { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .an-box { border:1px solid var(--border); border-radius:8px; padding:11px 13px; }
@@ -474,6 +476,8 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   .fa-prof .fp-r span:first-child { color:var(--faint); min-width:92px; }
   .fa-prof .fp-s { font-size:0.76rem; color:var(--muted); line-height:1.55; margin-top:9px;
     padding-top:9px; border-top:1px solid var(--border); }
+.fund-note { background:var(--panel-2); border:1px dashed var(--border-strong); border-radius:12px;
+    padding:12px 14px; font-size:0.78rem; color:var(--muted); line-height:1.6; margin:16px 0 4px; }
   .fa-load { color:var(--faint); font-size:0.8rem; padding:26px 4px; text-align:center; }
 
   @media (max-width:600px){
@@ -591,6 +595,213 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     .drawer{ position:fixed; }
     .drawer-head{ position:relative; }
   }
+  /* ═══════════════════════════════════════════════
+     TEMA: CAM (Glassmorphism) — seçenek D
+     Not: blur yalnızca ana panellerde (eski Mac'i yormamak için)
+     ═══════════════════════════════════════════════ */
+  :root{
+    --bg:#080b12; --panel:rgba(255,255,255,.065); --panel-2:rgba(255,255,255,.045);
+    --row-hover:rgba(255,255,255,.10); --row-alt:transparent;
+    --border:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18);
+    --ink:#eaf0f8; --muted:#9fb0c9; --faint:#6b7d96;
+    --accent:#e2b45f; --accent-dim:rgba(226,180,95,.55);
+    --pos:#5ee7a8; --pos-bg:rgba(94,231,168,.14);
+    --neg:#ff7a6e; --neg-bg:rgba(255,122,110,.14);
+    --etf:#7bb7f0; --etf-bg:rgba(123,183,240,.16);
+    --fund:#c49bf0; --fund-bg:rgba(196,155,240,.16);
+    --live:#5ee7a8; --shadow:0 10px 34px rgba(0,0,0,.42); --r:18px;
+  }
+  :root[data-theme="light"]{
+    --bg:#eef2f8; --panel:rgba(255,255,255,.72); --panel-2:rgba(255,255,255,.55);
+    --row-hover:rgba(255,255,255,.9); --border:rgba(20,35,60,.10); --border-strong:rgba(20,35,60,.18);
+    --ink:#0f1826; --muted:#4a5c75; --faint:#7d8da3;
+    --pos:#0e8a56; --pos-bg:rgba(14,138,86,.12); --neg:#cf3a2c; --neg-bg:rgba(207,58,44,.12);
+    --shadow:0 10px 30px rgba(24,40,70,.14);
+  }
+  body{
+    background:
+      radial-gradient(120% 85% at 12% -5%, #2e3f73 0%, rgba(46,63,115,0) 58%),
+      radial-gradient(95% 70% at 95% 8%, #1d3350 0%, rgba(29,51,80,0) 62%),
+      #080b12;
+    background-attachment:fixed;
+  }
+  :root[data-theme="light"] body{
+    background:
+      radial-gradient(120% 85% at 12% -5%, #cfe0fb 0%, rgba(207,224,251,0) 58%),
+      radial-gradient(95% 70% at 95% 8%, #dbe9f7 0%, rgba(219,233,247,0) 62%),
+      #eef2f8;
+  }
+
+  /* Cam yüzeyler (blur burada) */
+  header, .tabbar, .pp, .an-search, .an-header{
+    background:rgba(255,255,255,.055);
+    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    border-bottom:1px solid var(--border);
+  }
+  :root[data-theme="light"] header, :root[data-theme="light"] .tabbar,
+  :root[data-theme="light"] .pp, :root[data-theme="light"] .an-search,
+  :root[data-theme="light"] .an-header{ background:rgba(255,255,255,.62); }
+  header{ box-shadow:none; }
+  .tabbar{ border-top:1px solid var(--border); border-bottom:none;
+    background:rgba(12,16,26,.72); }
+  :root[data-theme="light"] .tabbar{ background:rgba(255,255,255,.78); }
+  .note-bar, .toolbar{ background:transparent; border-bottom:none; }
+  .ticker{ background:transparent; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+
+  /* Kartlar — blur yok, sadece yarı saydam (performans) */
+  .kpis, .pp-cat, .pp-periods, .dist, .evt, .kv, .stat-box, .an-item,
+  .cs-top, .cs-row, .fa-scroll, .fa-prof, .modal-card, .drawer,
+  .sig-list, .news-list, .cal, .kv-grid, .price-banner, .an-results,
+  .swing-box, .overall, .interp, .evt-row, .fund-note{
+    border-radius:var(--r);
+    border:1px solid var(--border);
+    box-shadow:0 4px 18px rgba(0,0,0,.22);
+  }
+  .kpis, .pp-cat, .stat-box, .an-item, .cs-row, .fa-prof, .price-banner,
+  .evt-row, .kv, .cal, .fa-scroll{ background:rgba(255,255,255,.06); }
+  :root[data-theme="light"] .kpis, :root[data-theme="light"] .pp-cat,
+  :root[data-theme="light"] .stat-box, :root[data-theme="light"] .an-item,
+  :root[data-theme="light"] .cs-row, :root[data-theme="light"] .fa-prof,
+  :root[data-theme="light"] .price-banner, :root[data-theme="light"] .evt-row,
+  :root[data-theme="light"] .kv, :root[data-theme="light"] .cal,
+  :root[data-theme="light"] .fa-scroll{ background:rgba(255,255,255,.75); }
+
+  .cs-top{ background:linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.05)); }
+  .drawer{ background:rgba(12,16,26,.92); -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px);
+    border-left:1px solid var(--border-strong); }
+  :root[data-theme="light"] .drawer{ background:rgba(248,251,255,.94); }
+  .modal-card{ background:rgba(16,21,33,.95); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px); }
+  :root[data-theme="light"] .modal-card{ background:rgba(250,252,255,.96); }
+  .overlay{ background:rgba(4,7,13,.55); -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px); }
+
+  /* Düğme ve girişler */
+  .btn, #search, #anQuery, .field input, .field select, .pos-input{
+    border-radius:14px; border:1px solid var(--border-strong);
+    background:rgba(255,255,255,.07);
+  }
+  :root[data-theme="light"] .btn, :root[data-theme="light"] #search,
+  :root[data-theme="light"] #anQuery, :root[data-theme="light"] .field input,
+  :root[data-theme="light"] .field select, :root[data-theme="light"] .pos-input{
+    background:rgba(255,255,255,.8);
+  }
+  .btn:hover{ background:rgba(255,255,255,.13); border-color:var(--accent-dim); }
+  .btn.primary{ background:linear-gradient(135deg,#f3cd85,#dfae56); }
+  .btn.on, .fchip.on, .typesel button.on, .langsel button.on,
+  .pp-ccy button.on, .dist-tabs button.on, .fa-tabs button.on, .range-sel button.on{
+    background:linear-gradient(135deg,#f3cd85,#dfae56); color:#191307; border-color:transparent;
+    box-shadow:0 4px 14px rgba(226,180,95,.26);
+  }
+  .fchip, .typesel, .langsel, .pp-ccy, .dist-tabs, .fa-tabs button, .range-sel{
+    border-radius:13px; background:rgba(255,255,255,.055); border:1px solid var(--border);
+  }
+  .langsel button, .typesel button, .pp-ccy button, .dist-tabs button, .range-sel button{
+    background:transparent; border-left-color:var(--border);
+  }
+
+  /* Tablo — cam üstünde okunur */
+  thead th{ background:transparent; border-bottom:1px solid var(--border-strong); }
+  tbody td{ border-bottom:1px solid var(--border); }
+  td.name-cell{ background:transparent; border-right:1px solid var(--border); }
+  tbody tr:hover td, tbody tr:hover td.name-cell{ background:rgba(255,255,255,.06); }
+  tbody tr:nth-child(even) td.name-cell{ background:transparent; }
+  tr.group-row td{ background:rgba(255,255,255,.05); border-radius:12px; }
+
+  /* Mobil kart görünümü — cam */
+  @media (max-width:600px){
+    tbody tr{ background:rgba(255,255,255,.06); border:1px solid var(--border);
+      border-radius:var(--r); box-shadow:0 4px 16px rgba(0,0,0,.2); }
+    :root[data-theme="light"] tbody tr{ background:rgba(255,255,255,.78); }
+    tbody tr:hover td{ background:transparent; }
+    tr.group-row{ background:transparent; box-shadow:none; border:none; }
+  }
+
+  /* Vurgular */
+  .brand .mark{ box-shadow:0 0 20px rgba(226,180,95,.5); }
+  .cs-grade.g-A{ background:rgba(94,231,168,.18); color:var(--pos); box-shadow:0 0 26px rgba(94,231,168,.22); }
+  .pos-line{ background:rgba(226,180,95,.10); border:1px solid var(--accent-dim); border-radius:14px; }
+  .chg.pos, .impact-pill.pos{ background:var(--pos-bg); }
+  .chg.neg, .impact-pill.neg{ background:var(--neg-bg); }
+  .tab.on{ color:var(--accent); }
+  .disclaimer{ background:rgba(255,255,255,.045); border:1px dashed var(--border-strong); border-radius:14px; }
+
+  @media (prefers-reduced-motion:reduce){ *{ backdrop-filter:none !important; -webkit-backdrop-filter:none !important; } }
+  /* ---- Karne / Değerleme / Temettü ---- */
+  .sc-list{display:flex;flex-direction:column;gap:11px}
+  .sc-dim{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:14px;padding:11px 13px}
+  .sc-h{display:flex;justify-content:space-between;align-items:baseline;font-size:.8rem;font-weight:600}
+  .sc-h b{font-family:var(--font-mono);color:var(--accent)}
+  .sc-bar{height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:7px}
+  .sc-bar span{display:block;height:100%;border-radius:4px}
+  .sc-bar .pos{background:linear-gradient(90deg,#5ee7a8,#37d385)}
+  .sc-bar .mid{background:linear-gradient(90deg,#f3cd85,#e2b45f)}
+  .sc-bar .low{background:linear-gradient(90deg,#ff9a8f,#ff7a6e)}
+  .sc-notes{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .sc-n{font-size:.63rem;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+  .sc-n.pos{border-color:rgba(94,231,168,.4);color:var(--pos)}
+  .sc-n.neg{border-color:rgba(255,122,110,.4);color:var(--neg)}
+  .val-row{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .v-h{display:flex;justify-content:space-between;align-items:baseline}
+  .v-n{font-size:.8rem;font-weight:600}
+  .v-c{font-family:var(--font-mono);font-size:1.05rem;font-weight:700;color:var(--ink)}
+  .v-track{position:relative;height:7px;border-radius:4px;margin:11px 0 7px;
+    background:linear-gradient(90deg,rgba(94,231,168,.35),rgba(226,180,95,.3),rgba(255,122,110,.35))}
+  .v-dot{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;background:var(--accent);
+    border:2px solid var(--bg);transform:translate(-50%,-50%);box-shadow:0 0 0 1px var(--accent-dim)}
+  .v-avg{position:absolute;top:-3px;width:2px;height:13px;background:var(--muted);transform:translateX(-50%);opacity:.7}
+  .v-f{display:flex;justify-content:space-between;font-size:.63rem;color:var(--faint);font-family:var(--font-mono)}
+  .v-f .pos{color:var(--pos)} .v-f .neg{color:var(--neg)}
+  .d-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .d-b{font-size:.68rem;font-weight:700;padding:4px 11px;border-radius:999px;border:1px solid var(--border)}
+  .d-b.pos{background:var(--pos-bg);color:var(--pos);border-color:rgba(94,231,168,.35)}
+  .d-b.neg{background:var(--neg-bg);color:var(--neg);border-color:rgba(255,122,110,.35)}
+  .d-chart{display:flex;align-items:flex-end;gap:5px;height:110px;background:rgba(255,255,255,.05);
+    border:1px solid var(--border);border-radius:14px;padding:12px 12px 6px}
+  .d-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+  .d-col span{width:100%;max-width:26px;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--accent),rgba(226,180,95,.35))}
+  .d-col em{font-size:.55rem;color:var(--faint);font-style:normal;margin-top:5px;font-family:var(--font-mono)}
+  /* ---- Mali tablo kartları ---- */
+  .fa-per-row{display:flex;gap:6px;margin-bottom:11px}
+  .fa-per{padding:6px 13px;border-radius:11px;border:1px solid var(--border);
+    background:rgba(255,255,255,.06);color:var(--muted);font-size:.7rem;font-weight:700}
+  .fa-per.on{background:linear-gradient(135deg,#f3cd85,#dfae56);color:#191307;border-color:transparent}
+  .mcard{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:16px;
+    padding:13px 15px;margin-bottom:10px}
+  .mc-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .mc-l{font-size:.78rem;font-weight:600;color:var(--muted)}
+  .mc-v{font-family:var(--font-mono);font-size:1.25rem;font-weight:700;color:var(--ink)}
+  .mc-v.neg{color:var(--neg)}
+  .mc-bars{display:flex;align-items:flex-end;gap:6px;height:56px;margin:11px 0 8px}
+  .mb-col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+  .mb-col span{width:100%;max-width:34px;border-radius:5px 5px 0 0;background:rgba(226,180,95,.35)}
+  .mb-col span.now{background:linear-gradient(180deg,var(--accent),rgba(226,180,95,.5))}
+  .mb-col span.neg{background:rgba(255,122,110,.4)}
+  .mb-col span.neg.now{background:linear-gradient(180deg,var(--neg),rgba(255,122,110,.5))}
+  .mb-col em{font-size:.53rem;color:var(--faint);font-style:normal;margin-top:5px;font-family:var(--font-mono)}
+  .mc-chips{display:flex;gap:6px;flex-wrap:wrap}
+  .mc-chip{font-size:.64rem;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--border)}
+  .mc-chip.pos{background:var(--pos-bg);color:var(--pos);border-color:rgba(94,231,168,.35)}
+  .mc-chip.neg{background:var(--neg-bg);color:var(--neg);border-color:rgba(255,122,110,.35)}
+  .mg-row{display:flex;gap:8px;margin:2px 0 10px;flex-wrap:wrap}
+  .mg{flex:1;min-width:96px;background:rgba(255,255,255,.05);border:1px solid var(--border);
+    border-radius:12px;padding:9px 11px;text-align:center}
+  .mg span{display:block;font-size:.58rem;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
+  .mg b{display:block;font-family:var(--font-mono);font-size:.95rem;margin-top:3px}
+  .fut{background:linear-gradient(180deg,rgba(226,180,95,.10),rgba(255,255,255,.04));
+    border:1px solid var(--accent-dim);border-radius:16px;padding:13px 15px;margin:4px 0 10px}
+  .fut-h{font-size:.72rem;font-weight:700;color:var(--accent);margin-bottom:9px}
+  .fut-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border-radius:11px;overflow:hidden}
+  .fut-row{display:flex;align-items:center;gap:8px;background:rgba(12,16,26,.5);padding:8px 11px;font-size:.72rem}
+  .fr-p{flex:1;min-width:0;color:var(--ink);font-weight:600}
+  .fr-v{font-family:var(--font-mono);color:var(--muted)}
+  .fr-e{font-family:var(--font-mono);color:var(--faint);font-size:.66rem;min-width:62px;text-align:right}
+  .fr-g{font-family:var(--font-mono);font-weight:700;min-width:46px;text-align:right}
+  .stale{background:linear-gradient(180deg,rgba(226,180,95,.14),rgba(255,255,255,.04));
+    border:1px solid var(--accent-dim);border-radius:14px;padding:11px 13px;margin-bottom:11px}
+  .stale b{color:var(--accent)}
+  .st-b{font-size:.72rem;color:var(--muted);line-height:1.55;margin-top:4px}
+  .st-e{font-size:.76rem;font-family:var(--font-mono);margin-top:7px;color:var(--ink)}
+  .asof{font-size:.66rem;color:var(--faint);margin-bottom:10px}
+  .asof b{color:var(--muted);font-family:var(--font-mono)}
 </style>
 </head>
 <body>
@@ -677,8 +888,12 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     tr:{ tag:'Canlı', connecting:'Bağlanıyor…', liveCount:'{n} canlı', ago:'{t} önce', never:'—',
       kTotal:'Toplam', kLive:'Canlı', kUp:'Günü +', kDown:'Günü −',
       auto:'Oto-yenile', refresh:'↻ Yenile', add:'Ekle',
+      faEstTab:'Beklentiler', faPeriod:'Dönem', faEpsEst:'EPS Tahmini', faRevEst:'Ciro Tahmini', faGrowth:'Büyüme', esQ0:'Bu çeyrek', esQ1:'Gelecek çeyrek', esY0:'Bu yıl', esY1:'Gelecek yıl', faEstNote:'Analist konsensüs tahminleridir; kesinlik taşımaz.', faFundNote:'ℹ️ Fon ve ETF\'lerin gelir tablosu/bilançosu olmaz — bunlar birçok şirketin sepetidir. Fiyat, grafik ve teknik analiz Portföy sekmesinde mevcut.', csNotStock:'CAN SLIM karnesi yalnızca hisseler için hesaplanır (fon/ETF için geçerli değildir).', shareOfPort:'Portföyündeki payı', 
+      faScore:'Karne', faVal:'Değerleme', faDiv:'Temettü', scValue:'Değer', scGrowth:'Büyüme', scQuality:'Kalite', scMomentum:'Momentum', scSub:'4 boyutlu değerlendirme', scCheapVsHist:'Geçmişine göre %{v} ucuz', scBelowHist:'Ortalamanın %{v} altında', scExpensiveVsHist:'Geçmişine göre %{v} pahalı', scLowPe:'Düşük F/K ({v})', scHighPe:'Yüksek F/K ({v})', scRevStrong:'Ciro güçlü (+%{v})', scRevOk:'Ciro artıyor (+%{v})', scRevDown:'Ciro daralıyor (%{v})', scEarnStrong:'Kâr güçlü (+%{v})', scEarnDown:'Kâr azalıyor (%{v})', scMarginGood:'İyi kâr marjı (%{v})', scLoss:'Zarar ediyor', scRoeGood:'Yüksek ROE (%{v})', scDebtLow:'Düşük borç', scDebtHigh:'Yüksek borç ({v}×)', scAbove200:'200g ortalama üstünde', scAbove50:'50g ortalama üstünde', scMacdUp:'MACD yukarı', scMacdDown:'MACD aşağı', vPe:'F/K Oranı', vPb:'PD/DD (Fiyat/Defter)', vEv:'FD/FAVÖK', vAvg:'ortalama', vCheap:'ucuz', vRich:'pahalı', vFair:'makul', vNote:'Şirketin kendi geçmiş ortalamasıyla kıyaslanır. Nokta = bugün, çizgi = ortalama.', dNone:'Bu şirket temettü ödemiyor.', dYears:'{n} yıldır ödüyor', dStreak:'{n} yıl üst üste artış', dCuts:'{n} kez kesinti', dNoCuts:'Hiç kesinti yok', dLast:'Son ödeme', dNote:'Yıllık toplam temettü tutarları.', 
+      faVsPrev:'önceki', faVsYear:'yıllık', faOutlook:'Gelecek Beklentisi', fiEbitda:'FAVÖK', fiEps:'Hisse Başı Kâr (EPS)', fiGrossM:'Brüt Marj', fiOpM:'Faaliyet Marjı', fiNetM:'Net Marj', 
+      stTitle:'Son çeyrek henüz mali tablolara yansımadı', stBody:'Şirket {q} çeyreğini açıkladı, ancak veri sağlayıcı (Yahoo) mali tablolara henüz işlemedi. Aşağıdaki tablolar {s} dönemine aittir.', stEps:'Açıklanan EPS', stAsOf:'Son dönem', 
       interpTitle:'Son Çeyrek Yorumu',
-      navPortfolio:'Portföy', navAnalysis:'Analiz', anPh:'Şirket ara: Volvo, Apple, Aselsan…', anIntro:'Yukarıdan bir şirket arayın.<br>CAN SLIM karnesi ve mali tabloları görün.', anLoading:'Analiz ediliyor…', anNoData:'Bu varlık için temel veri yok (fon/ETF olabilir).', csScore:'Karnesi', csTarget:'Hedef', csVol:'hacim', csHolders:'kurum', csAboveMa:'200g üstünde', cs_C:'Son çeyrek kâr büyümesi', cs_A:'Yıllık kâr büyümesi + ROE', cs_N:'Zirveye yakınlık', cs_S:'Hisse arzı & hacim', cs_L:'Piyasa lideri mi', cs_I:'Kurumsal sahiplik', cs_M:'Genel piyasa yönü', csDisc:'⚠️ CAN SLIM, William O\'Neil\'in metodolojisidir. Bu karne bilgi amaçlıdır; yatırım tavsiyesi değildir.', faInc:'Gelir Tablosu', faBal:'Bilanço', faCf:'Nakit Akışı', faEarn:'Kâr Geçmişi', faProf:'Profil', faQ:'Çeyreklik', faY:'Yıllık', faItem:'Kalem', faQuarter:'Çeyrek', faEst:'Beklenti', faAct:'Gerçekleşen', faSurprise:'Sürpriz', faEarnNote:'Beklenti = analist tahmini, Gerçekleşen = açıklanan EPS.', faUnit:'Tutarlar {c} cinsindendir.', fiRev:'Ciro', fiGross:'Brüt Kâr', fiOp:'Faaliyet Kârı', fiNet:'Net Kâr', fiAssets:'Toplam Varlık', fiLiab:'Toplam Borç', fiEquity:'Özkaynak', fiCash:'Nakit', fiDebt:'Uzun Vadeli Borç', fiOpCf:'Faaliyet Nakit Akışı', fiCapex:'Yatırım Harcaması', fiDiv:'Ödenen Temettü', fpSector:'Sektör', fpIndustry:'Endüstri', fpEmployees:'Çalışan', fpCountry:'Ülke', fpCap:'Piyasa Değeri', fpWeb:'Web', 
+      navPortfolio:'Portföy', navAnalysis:'Analiz', anPh:'Şirket ara: Volvo, Apple, Aselsan…', anIntro:'Yukarıdan bir şirket arayın.<br>CAN SLIM karnesi ve mali tabloları görün.', anLoading:'Analiz ediliyor…', anNoData:'Bu varlık için temel veri yok (fon/ETF olabilir).', csScore:'Karnesi', csTarget:'Hedef', csVol:'hacim', csHolders:'kurum', csAboveMa:'200g üstünde', cs_C:'Son çeyrek kâr büyümesi', cs_A:'Yıllık kâr büyümesi + ROE', cs_N:'Zirveye yakınlık', cs_S:'Hisse arzı & hacim', cs_L:'Piyasa lideri mi', cs_I:'Kurumsal sahiplik', cs_M:'Genel piyasa yönü', csDisc:'⚠️ CAN SLIM, William O\'Neil\'in metodolojisidir. Bu karne bilgi amaçlıdır; yatırım tavsiyesi değildir.', faInc:'Gelir Tablosu', faBal:'Bilanço', faCf:'Nakit Akışı', faEarn:'Kâr Geçmişi', faProf:'Profil', faQ:'Çeyreklik', faY:'Yıllık', faItem:'Kalem', faQuarter:'Çeyrek', faEst:'Beklenti', faAct:'Gerçekleşen', faSurprise:'Sürpriz', faEarnNote:'Beklenti = analist tahmini, Gerçekleşen = açıklanan EPS.', faUnit:'Tutarlar {c} cinsindendir.', fiRev:'Ciro', fiGross:'Brüt Kâr', fiOp:'Faaliyet Kârı', fiNet:'Net Kâr', fiAssets:'Toplam Varlık', fiLiab:'Toplam Borç', fiEquity:'Özkaynak', fiCash:'Nakit', fiDebt:'Uzun Vadeli Borç', fiOpCf:'Faaliyet Nakit Akışı', fiFcf:'Serbest Nakit Akışı', fiCapex:'Yatırım Harcaması', fiDiv:'Ödenen Temettü', fpSector:'Sektör', fpIndustry:'Endüstri', fpEmployees:'Çalışan', fpCountry:'Ülke', fpCap:'Piyasa Değeri', fpWeb:'Web', 
       ppTitle:'Toplam Değer', today:'bugün', pDay:'Gün', pWeek:'Hafta', pMonth:'Ay', pYear:'Yıl', grpLabel:'🌍 Ülke', grpOff:'☰ Liste', swingBtn:'🎯 Swing', hideVals:'Değerleri gizle/göster', distBtn:'📊 Dağılım', distTitle:'Portföy Dağılımı', distType:'Tür', distSector:'Sektör', evTitle:'Yaklaşan Olaylar', evEarn:'Bilanço', evDiv:'Temettü ödemesi', evExDiv:'Temettü son gün', evToday:'BUGÜN', evTomorrow:'yarın', evInDays:'{n} gün', evOn:'Bildirim açık', evOff:'Bildirim kapalı', evNoSupport:'Bu tarayıcı bildirim desteklemiyor.', evIosHint:'iPhone\'da bildirim için: paylaş menüsünden "Ana Ekrana Ekle" yapın, sonra o ikondan açıp tekrar deneyin.', evDenied:'Bildirim izni verilmedi. Telefon ayarlarından açabilirsiniz.',
       chartTitle:'Grafik', r_1mo:'1A', r_3mo:'3A', r_6mo:'6A', r_1y:'1Y',
       swingTitle:'Swing Uygunluğu', swingFit:'uygun',
@@ -722,8 +937,12 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     en:{ tag:'Live', connecting:'Connecting…', liveCount:'{n} live', ago:'{t} ago', never:'—',
       kTotal:'Total', kLive:'Live', kUp:'Day +', kDown:'Day −',
       auto:'Auto', refresh:'↻ Refresh', add:'Add',
+      faEstTab:'Estimates', faPeriod:'Period', faEpsEst:'EPS Est.', faRevEst:'Revenue Est.', faGrowth:'Growth', esQ0:'This quarter', esQ1:'Next quarter', esY0:'This year', esY1:'Next year', faEstNote:'Analyst consensus estimates; not guaranteed.', faFundNote:'ℹ️ Funds and ETFs have no income statement — they are baskets of many companies. Price, chart and technicals are on the Portfolio tab.', csNotStock:'CAN SLIM applies to stocks only (not funds/ETFs).', shareOfPort:'Share of portfolio', 
+      faScore:'Scorecard', faVal:'Valuation', faDiv:'Dividend', scValue:'Value', scGrowth:'Growth', scQuality:'Quality', scMomentum:'Momentum', scSub:'Four-dimension review', scCheapVsHist:'{v}% cheaper than its history', scBelowHist:'{v}% below average', scExpensiveVsHist:'{v}% pricier than history', scLowPe:'Low P/E ({v})', scHighPe:'High P/E ({v})', scRevStrong:'Strong revenue (+{v}%)', scRevOk:'Revenue growing (+{v}%)', scRevDown:'Revenue shrinking ({v}%)', scEarnStrong:'Strong earnings (+{v}%)', scEarnDown:'Earnings falling ({v}%)', scMarginGood:'Good margin ({v}%)', scLoss:'Operating at a loss', scRoeGood:'High ROE ({v}%)', scDebtLow:'Low debt', scDebtHigh:'High debt ({v}×)', scAbove200:'Above 200d average', scAbove50:'Above 50d average', scMacdUp:'MACD up', scMacdDown:'MACD down', vPe:'P/E Ratio', vPb:'P/B (Price/Book)', vEv:'EV/EBITDA', vAvg:'average', vCheap:'cheap', vRich:'rich', vFair:'fair', vNote:'Compared with the company\'s own history. Dot = today, line = average.', dNone:'This company pays no dividend.', dYears:'Paying {n} years', dStreak:'{n} years of growth', dCuts:'{n} cuts', dNoCuts:'No cuts', dLast:'Last payment', dNote:'Total dividends per year.', 
+      faVsPrev:'vs prev', faVsYear:'YoY', faOutlook:'Outlook', fiEbitda:'EBITDA', fiEps:'EPS', fiGrossM:'Gross Margin', fiOpM:'Op. Margin', fiNetM:'Net Margin', 
+      stTitle:'Latest quarter not yet in the statements', stBody:'The company reported {q}, but the data provider (Yahoo) has not ingested it into the statements yet. Tables below are as of {s}.', stEps:'Reported EPS', stAsOf:'As of', 
       interpTitle:'Latest Quarter Review',
-      navPortfolio:'Portfolio', navAnalysis:'Analysis', anPh:'Search company: Volvo, Apple…', anIntro:'Search a company above.<br>See its CAN SLIM scorecard and financials.', anLoading:'Analyzing…', anNoData:'No fundamental data (may be a fund/ETF).', csScore:'Scorecard', csTarget:'Target', csVol:'volume', csHolders:'holders', csAboveMa:'above 200d', cs_C:'Current quarterly earnings', cs_A:'Annual growth + ROE', cs_N:'Near new high', cs_S:'Share supply & volume', cs_L:'Market leader', cs_I:'Institutional ownership', cs_M:'Market direction', csDisc:'⚠️ CAN SLIM is William O\'Neil\'s methodology. Informational only; not investment advice.', faInc:'Income', faBal:'Balance Sheet', faCf:'Cash Flow', faEarn:'Earnings', faProf:'Profile', faQ:'Quarterly', faY:'Annual', faItem:'Item', faQuarter:'Quarter', faEst:'Estimate', faAct:'Actual', faSurprise:'Surprise', faEarnNote:'Estimate = analyst consensus, Actual = reported EPS.', faUnit:'Figures in {c}.', fiRev:'Revenue', fiGross:'Gross Profit', fiOp:'Operating Income', fiNet:'Net Income', fiAssets:'Total Assets', fiLiab:'Total Liabilities', fiEquity:'Equity', fiCash:'Cash', fiDebt:'Long-term Debt', fiOpCf:'Operating Cash Flow', fiCapex:'CapEx', fiDiv:'Dividends Paid', fpSector:'Sector', fpIndustry:'Industry', fpEmployees:'Employees', fpCountry:'Country', fpCap:'Market Cap', fpWeb:'Web', 
+      navPortfolio:'Portfolio', navAnalysis:'Analysis', anPh:'Search company: Volvo, Apple…', anIntro:'Search a company above.<br>See its CAN SLIM scorecard and financials.', anLoading:'Analyzing…', anNoData:'No fundamental data (may be a fund/ETF).', csScore:'Scorecard', csTarget:'Target', csVol:'volume', csHolders:'holders', csAboveMa:'above 200d', cs_C:'Current quarterly earnings', cs_A:'Annual growth + ROE', cs_N:'Near new high', cs_S:'Share supply & volume', cs_L:'Market leader', cs_I:'Institutional ownership', cs_M:'Market direction', csDisc:'⚠️ CAN SLIM is William O\'Neil\'s methodology. Informational only; not investment advice.', faInc:'Income', faBal:'Balance Sheet', faCf:'Cash Flow', faEarn:'Earnings', faProf:'Profile', faQ:'Quarterly', faY:'Annual', faItem:'Item', faQuarter:'Quarter', faEst:'Estimate', faAct:'Actual', faSurprise:'Surprise', faEarnNote:'Estimate = analyst consensus, Actual = reported EPS.', faUnit:'Figures in {c}.', fiRev:'Revenue', fiGross:'Gross Profit', fiOp:'Operating Income', fiNet:'Net Income', fiAssets:'Total Assets', fiLiab:'Total Liabilities', fiEquity:'Equity', fiCash:'Cash', fiDebt:'Long-term Debt', fiOpCf:'Operating Cash Flow', fiFcf:'Free Cash Flow', fiCapex:'CapEx', fiDiv:'Dividends Paid', fpSector:'Sector', fpIndustry:'Industry', fpEmployees:'Employees', fpCountry:'Country', fpCap:'Market Cap', fpWeb:'Web', 
       ppTitle:'Total Value', today:'today', pDay:'Day', pWeek:'Week', pMonth:'Month', pYear:'Year', grpLabel:'🌍 Country', grpOff:'☰ List', swingBtn:'🎯 Swing', hideVals:'Hide/show values', distBtn:'📊 Allocation', distTitle:'Portfolio Allocation', distType:'Type', distSector:'Sector', evTitle:'Upcoming Events', evEarn:'Earnings', evDiv:'Dividend payment', evExDiv:'Ex-dividend', evToday:'TODAY', evTomorrow:'tomorrow', evInDays:'in {n}d', evOn:'Alerts on', evOff:'Alerts off', evNoSupport:'This browser does not support notifications.', evIosHint:'On iPhone: use Share > "Add to Home Screen", open from that icon, then try again.', evDenied:'Notification permission denied. Enable it in settings.',
       chartTitle:'Chart', r_1mo:'1M', r_3mo:'3M', r_6mo:'6M', r_1y:'1Y',
       swingTitle:'Swing Fit', swingFit:'fit',
@@ -767,8 +986,12 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     sv:{ tag:'Live', connecting:'Ansluter…', liveCount:'{n} live', ago:'för {t} sedan', never:'—',
       kTotal:'Totalt', kLive:'Live', kUp:'Dag +', kDown:'Dag −',
       auto:'Auto', refresh:'↻ Uppdatera', add:'Lägg till',
+      faEstTab:'Prognoser', faPeriod:'Period', faEpsEst:'EPS-estimat', faRevEst:'Intäktsestimat', faGrowth:'Tillväxt', esQ0:'Detta kvartal', esQ1:'Nästa kvartal', esY0:'I år', esY1:'Nästa år', faEstNote:'Analytikers konsensusestimat; ingen garanti.', faFundNote:'ℹ️ Fonder och ETF:er har ingen resultaträkning — de är korgar av många bolag. Pris, diagram och teknik finns på Portfölj-fliken.', csNotStock:'CAN SLIM gäller endast aktier (inte fonder/ETF:er).', shareOfPort:'Andel av portföljen', 
+      faScore:'Betyg', faVal:'Värdering', faDiv:'Utdelning', scValue:'Värde', scGrowth:'Tillväxt', scQuality:'Kvalitet', scMomentum:'Momentum', scSub:'Fyrdimensionell bedömning', scCheapVsHist:'{v}% billigare än historiskt', scBelowHist:'{v}% under snittet', scExpensiveVsHist:'{v}% dyrare än historiskt', scLowPe:'Lågt P/E ({v})', scHighPe:'Högt P/E ({v})', scRevStrong:'Stark omsättning (+{v}%)', scRevOk:'Omsättning växer (+{v}%)', scRevDown:'Omsättning minskar ({v}%)', scEarnStrong:'Stark vinst (+{v}%)', scEarnDown:'Vinst faller ({v}%)', scMarginGood:'Bra marginal ({v}%)', scLoss:'Går med förlust', scRoeGood:'Hög ROE ({v}%)', scDebtLow:'Låg skuld', scDebtHigh:'Hög skuld ({v}×)', scAbove200:'Över 200d-snitt', scAbove50:'Över 50d-snitt', scMacdUp:'MACD upp', scMacdDown:'MACD ner', vPe:'P/E-tal', vPb:'P/B (Pris/Bok)', vEv:'EV/EBITDA', vAvg:'snitt', vCheap:'billig', vRich:'dyr', vFair:'rimlig', vNote:'Jämfört med bolagets egen historik. Punkt = idag, linje = snitt.', dNone:'Detta bolag betalar ingen utdelning.', dYears:'Betalar {n} år', dStreak:'{n} år av höjningar', dCuts:'{n} sänkningar', dNoCuts:'Inga sänkningar', dLast:'Senaste', dNote:'Total utdelning per år.', 
+      faVsPrev:'vs föreg', faVsYear:'ÅoÅ', faOutlook:'Utsikter', fiEbitda:'EBITDA', fiEps:'EPS', fiGrossM:'Bruttomarginal', fiOpM:'Rörelsemarg.', fiNetM:'Nettomarginal', 
+      stTitle:'Senaste kvartalet finns ännu inte i rapporterna', stBody:'Bolaget rapporterade {q}, men dataleverantören (Yahoo) har inte lagt in det ännu. Tabellerna nedan avser {s}.', stEps:'Rapporterad EPS', stAsOf:'Per', 
       interpTitle:'Senaste Kvartalet',
-      navPortfolio:'Portfölj', navAnalysis:'Analys', anPh:'Sök bolag: Volvo, Apple…', anIntro:'Sök ett bolag ovan.<br>Se dess CAN SLIM-betyg och rapporter.', anLoading:'Analyserar…', anNoData:'Ingen fundamental data (kan vara fond/ETF).', csScore:'Betyg', csTarget:'Mål', csVol:'volym', csHolders:'institut', csAboveMa:'över 200d', cs_C:'Kvartalsvinst tillväxt', cs_A:'Årlig tillväxt + ROE', cs_N:'Nära ny topp', cs_S:'Aktieutbud & volym', cs_L:'Marknadsledare', cs_I:'Institutionellt ägande', cs_M:'Marknadsriktning', csDisc:'⚠️ CAN SLIM är William O\'Neils metodik. Endast information; inte investeringsråd.', faInc:'Resultat', faBal:'Balans', faCf:'Kassaflöde', faEarn:'Vinsthistorik', faProf:'Profil', faQ:'Kvartal', faY:'År', faItem:'Post', faQuarter:'Kvartal', faEst:'Estimat', faAct:'Utfall', faSurprise:'Överraskning', faEarnNote:'Estimat = analytikerkonsensus, Utfall = rapporterad EPS.', faUnit:'Belopp i {c}.', fiRev:'Intäkter', fiGross:'Bruttovinst', fiOp:'Rörelseresultat', fiNet:'Nettovinst', fiAssets:'Totala Tillgångar', fiLiab:'Totala Skulder', fiEquity:'Eget Kapital', fiCash:'Kassa', fiDebt:'Långfristig Skuld', fiOpCf:'Operativt Kassaflöde', fiCapex:'Investeringar', fiDiv:'Utdelningar', fpSector:'Sektor', fpIndustry:'Bransch', fpEmployees:'Anställda', fpCountry:'Land', fpCap:'Börsvärde', fpWeb:'Webb', 
+      navPortfolio:'Portfölj', navAnalysis:'Analys', anPh:'Sök bolag: Volvo, Apple…', anIntro:'Sök ett bolag ovan.<br>Se dess CAN SLIM-betyg och rapporter.', anLoading:'Analyserar…', anNoData:'Ingen fundamental data (kan vara fond/ETF).', csScore:'Betyg', csTarget:'Mål', csVol:'volym', csHolders:'institut', csAboveMa:'över 200d', cs_C:'Kvartalsvinst tillväxt', cs_A:'Årlig tillväxt + ROE', cs_N:'Nära ny topp', cs_S:'Aktieutbud & volym', cs_L:'Marknadsledare', cs_I:'Institutionellt ägande', cs_M:'Marknadsriktning', csDisc:'⚠️ CAN SLIM är William O\'Neils metodik. Endast information; inte investeringsråd.', faInc:'Resultat', faBal:'Balans', faCf:'Kassaflöde', faEarn:'Vinsthistorik', faProf:'Profil', faQ:'Kvartal', faY:'År', faItem:'Post', faQuarter:'Kvartal', faEst:'Estimat', faAct:'Utfall', faSurprise:'Överraskning', faEarnNote:'Estimat = analytikerkonsensus, Utfall = rapporterad EPS.', faUnit:'Belopp i {c}.', fiRev:'Intäkter', fiGross:'Bruttovinst', fiOp:'Rörelseresultat', fiNet:'Nettovinst', fiAssets:'Totala Tillgångar', fiLiab:'Totala Skulder', fiEquity:'Eget Kapital', fiCash:'Kassa', fiDebt:'Långfristig Skuld', fiOpCf:'Operativt Kassaflöde', fiFcf:'Fritt Kassaflöde', fiCapex:'Investeringar', fiDiv:'Utdelningar', fpSector:'Sektor', fpIndustry:'Bransch', fpEmployees:'Anställda', fpCountry:'Land', fpCap:'Börsvärde', fpWeb:'Webb', 
       ppTitle:'Totalt Värde', today:'idag', pDay:'Dag', pWeek:'Vecka', pMonth:'Månad', pYear:'År', grpLabel:'🌍 Land', grpOff:'☰ Lista', swingBtn:'🎯 Swing', hideVals:'Dölj/visa värden', distBtn:'📊 Fördelning', distTitle:'Portföljfördelning', distType:'Typ', distSector:'Sektor', evTitle:'Kommande Händelser', evEarn:'Rapport', evDiv:'Utdelning', evExDiv:'X-dag utdelning', evToday:'IDAG', evTomorrow:'imorgon', evInDays:'om {n}d', evOn:'Aviseringar på', evOff:'Aviseringar av', evNoSupport:'Webbläsaren stöder inte aviseringar.', evIosHint:'På iPhone: Dela > "Lägg till på hemskärmen", öppna från ikonen och försök igen.', evDenied:'Avisering nekad. Aktivera i inställningar.',
       chartTitle:'Diagram', r_1mo:'1M', r_3mo:'3M', r_6mo:'6M', r_1y:'1Å',
       swingTitle:'Swing-lämplighet', swingFit:'lämplig',
@@ -938,6 +1161,11 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   } else {
     loadedCompanies = isOwnerLoad ? JSON.parse(JSON.stringify(DEFAULTS)) : {};
   }
+  // Endeksler/emtia herkeste bulunur (kişisel varlık değil, piyasa verisi).
+  // Eski kayıtlarda eksikse tamamla — böylece güncelleme sonrası kaybolmazlar.
+  Object.keys(INDEX_ITEMS).forEach(function(k){
+    if(!loadedCompanies[k]) loadedCompanies[k]=JSON.parse(JSON.stringify(INDEX_ITEMS[k]));
+  });
   var state = { companies: loadedCompanies, search:'', sector:'all', typeF:'all', sortKey:'chg', sortDir:-1, autoTimer:null, ccy:(function(){try{return localStorage.getItem('portfoyCcy')||'SEK';}catch(e){return 'SEK';}})(), fx:null, groupBy:(function(){try{return localStorage.getItem('portfoyGroup')||'none';}catch(e){return 'none';}})(), collapsed:{}, swingOnly:false, chartRange:'6mo', hideValues:(function(){try{return localStorage.getItem('portfoyHide')==='1';}catch(e){return false;}})(), distOpen:false, distMode:'type', notifyOn:(function(){try{return localStorage.getItem('portfoyNotify')==='1' && ('Notification' in window) && Notification.permission==='granted';}catch(e){return false;}})() };
   if (isOwnerLoad) { try { persist(); } catch(e){} }
   Object.keys(state.companies).forEach(function(k){ var c=state.companies[k]; if(!c.type) c.type='stock'; if(c.valueSEK==null&&VALUES[k]!=null) c.valueSEK=VALUES[k]; c.live={status:c.ysym?'idle':'nolive'}; c.fund=null; c.tech=null; c.qty=(c.antal!=null&&!isNaN(c.antal))?Number(c.antal):null; });
@@ -1269,7 +1497,12 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     var units=c.qty;
     var uv = units!=null ? (units>=100?String(Math.round(units)):String(Number(units.toFixed(2)))) : '';
     var valTxt = (units!=null && live && l.price!=null) ? '≈ '+fmtMoney(units*l.price*sekPerCcy(l.currency)) : '';
-    var posLine = (c.ysym||c.valueSEK!=null) ? '<div class="pos-line"><span class="pl-lbl">'+t('position')+'</span><input class="pos-input" type="number" step="any" min="0" inputmode="decimal" value="'+uv+'" data-antal-for="'+k+'" placeholder="0" title="'+t('editHere')+'" /><span class="pl-unit">'+t('units')+'</span><span class="pos-val" id="posVal">'+valTxt+'</span></div>' : '';
+    // Bu varlık portföyün yüzde kaçı?
+    var myVal=liveValSEK(c), totVal=0;
+    Object.keys(state.companies).forEach(function(kk){ var cc=state.companies[kk]; if(cc.type!=='index') totVal+=liveValSEK(cc); });
+    var sharePct=(totVal>0&&myVal>0)?(myVal/totVal*100):null;
+    var shareTxt=sharePct!=null?('<span class="pos-share" title="'+t('shareOfPort')+'">%'+sharePct.toFixed(1)+'</span>'):'';
+    var posLine = (c.ysym||c.valueSEK!=null) ? '<div class="pos-line"><span class="pl-lbl">'+t('position')+'</span><input class="pos-input" type="number" step="any" min="0" inputmode="decimal" value="'+uv+'" data-antal-for="'+k+'" placeholder="0" title="'+t('editHere')+'" /><span class="pl-unit">'+t('units')+'</span><span class="pos-val" id="posVal">'+valTxt+'</span>'+shareTxt+'</div>' : '';
     var analystBlock='';
     if(isStock && f.recMean!=null){ var recCls=f.recMean<=2.2?'pos':f.recMean>=3.5?'neg':''; var up=(f.targetMean!=null&&live&&l.price>0)?((f.targetMean-l.price)/l.price*100):null;
       analystBlock='<div class="sec-title">'+t('analystTitle')+' <span class="muted-note">'+t('analystSrc')+'</span></div><div class="analyst">'+
@@ -1430,7 +1663,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     }).catch(function(){ box.innerHTML=''; });
   }
   function anPick(sym,name){
-    AN.sym=sym; AN.name=name||sym; AN.fund=null; AN.cs=null;
+    AN.sym=sym; AN.name=name||sym; AN.fund=null; AN.cs=null; AN.deep=null; AN.deepLoading=null;
     document.getElementById('anResults').innerHTML='';
     document.getElementById('anQuery').value='';
     document.getElementById('anBody').innerHTML='<div class="fa-load">'+t('anLoading')+'</div>';
@@ -1480,19 +1713,85 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
       html+='<div class="disclaimer" style="margin-top:12px">'+t('csDisc')+'</div>';
       html+='<div id="anInterp"></div>';
     } else {
-      html+='<div class="an-empty">'+t('anNoData')+'</div>';
+      html+='<div class="an-empty">'+t('csNotStock')+'</div>';
     }
     if(AN.fund){
-      var tabs=[['inc','faInc'],['bal','faBal'],['cf','faCf'],['earn','faEarn'],['prof','faProf']];
+      var f0=AN.fund;
+      var hasFin=((f0.income||{}).quarterly||[]).length || ((f0.income||{}).annual||[]).length;
+      var tabs = hasFin ? [['score','faScore'],['val','faVal'],['div','faDiv'],
+                           ['inc','faInc'],['bal','faBal'],['cf','faCf'],['est','faEstTab'],['earn','faEarn'],['prof','faProf']]
+                        : [['prof','faProf']];
+      if(!hasFin){ AN.tab='prof'; html+='<div class="fund-note">'+t('faFundNote')+'</div>'; }
       html+='<div class="fa-tabs">'+tabs.map(function(p){
         return '<button data-fa="'+p[0]+'" class="'+(AN.tab===p[0]?'on':'')+'">'+t(p[1])+'</button>'; }).join('')+'</div>';
       html+=renderFaBody();
     }
     el.innerHTML=html;
   }
+  function loadDeep(sym){
+    if(AN.deepLoading===sym) return; AN.deepLoading=sym;
+    fetch('/api/deep?symbol='+encodeURIComponent(sym)).then(function(r){return r.json();}).then(function(dd){
+      if(AN.sym!==sym) return; AN.deep=dd; AN.deepLoading=null; renderAnalysis();
+    }).catch(function(){ AN.deepLoading=null; });
+  }
+  function renderScorecard(){
+    var sc=(AN.deep||{}).scorecard; if(!sc||!sc.ok) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    var labels={value:'scValue',growth:'scGrowth',quality:'scQuality',momentum:'scMomentum'};
+    var bars=sc.dims.map(function(dm){
+      var pct=dm.max?dm.score/dm.max*100:0;
+      var cls=pct>=67?'pos':pct>=34?'mid':'low';
+      return '<div class="sc-dim"><div class="sc-h"><span>'+t(labels[dm.key])+'</span>'+
+        '<b>'+dm.score+'/'+dm.max+'</b></div><div class="sc-bar"><span class="'+cls+'" style="width:'+pct+'%"></span></div>'+
+        (dm.notes.length?('<div class="sc-notes">'+dm.notes.map(function(nt){
+          return '<span class="sc-n '+nt.d+'">'+esc(t(nt.k,nt.v!=null?{v:nt.v}:null))+'</span>'; }).join('')+'</div>'):'')+
+        '</div>'; }).join('');
+    var g=sc.pct>=75?'A':sc.pct>=58?'B':sc.pct>=42?'C':sc.pct>=25?'D':'E';
+    return '<div class="cs-top" style="margin-bottom:12px"><div class="cs-grade g-'+g+'">'+g+'</div>'+
+      '<div class="cs-info"><div class="cn">'+t('faScore')+'</div><div class="cm">'+t('scSub')+'</div>'+
+      '<div class="cp">'+sc.total+' / '+sc.max+' · %'+sc.pct.toFixed(0)+'</div>'+
+      '<div class="cs-meter"><span style="width:'+sc.pct.toFixed(0)+'%"></span></div></div></div>'+
+      '<div class="sc-list">'+bars+'</div><div class="disclaimer" style="margin-top:11px">'+t('csDisc')+'</div>';
+  }
+  function renderValuation(){
+    var v=(AN.deep||{}).valuation; if(!v||!v.ok) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    var rows=[['pe','vPe'],['pb','vPb'],['evEbitda','vEv']].filter(function(x){return v[x[0]];}).map(function(x){
+      var m=v[x[0]]; var diff=m.vsAvgPct;
+      var cls=diff==null?'':(diff<=-10?'pos':diff>=20?'neg':'');
+      var lbl=diff==null?'':(diff<=-10?t('vCheap'):diff>=20?t('vRich'):t('vFair'));
+      var rng=(m.max-m.min)||1; var pos=Math.max(0,Math.min(100,(m.current-m.min)/rng*100));
+      return '<div class="val-row"><div class="v-h"><span class="v-n">'+t(x[1])+'</span>'+
+        '<span class="v-c">'+m.current.toFixed(1)+'</span></div>'+
+        '<div class="v-track"><span class="v-avg" style="left:'+Math.max(0,Math.min(100,(m.avg-m.min)/rng*100))+'%"></span>'+
+        '<span class="v-dot" style="left:'+pos+'%"></span></div>'+
+        '<div class="v-f"><span>'+m.min.toFixed(1)+'</span>'+
+        '<span class="'+cls+'">'+t('vAvg')+' '+m.avg.toFixed(1)+' · '+(diff!=null?pctTxt(diff,0):'—')+' '+lbl+'</span>'+
+        '<span>'+m.max.toFixed(1)+'</span></div></div>'; }).join('');
+    if(!rows) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    return rows+'<div class="fa-note">'+t('vNote')+'</div>';
+  }
+  function renderDividends(){
+    var dv=(AN.deep||{}).dividends; if(!dv||!dv.ok) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    if(!dv.hasDividend) return '<div class="an-empty">'+t('dNone')+'</div>';
+    var ys=dv.years||[]; var mx=Math.max.apply(null,ys.map(function(y){return y.total;}))||1;
+    var bars=ys.map(function(y){
+      return '<div class="d-col" title="'+y.year+': '+y.total+'"><span style="height:'+Math.max(4,y.total/mx*100)+'%"></span>'+
+        '<em>'+y.year.slice(2)+'</em></div>'; }).join('');
+    var badges='<span class="d-b pos">'+t('dYears',{n:dv.payingYears})+'</span>'+
+      (dv.growthStreak>0?'<span class="d-b pos">'+t('dStreak',{n:dv.growthStreak})+'</span>':'')+
+      (dv.cuts>0?'<span class="d-b neg">'+t('dCuts',{n:dv.cuts})+'</span>':'<span class="d-b pos">'+t('dNoCuts')+'</span>');
+    return '<div class="d-badges">'+badges+'</div><div class="d-chart">'+bars+'</div>'+
+      '<div class="fa-note">'+t('dLast')+': '+dv.lastAmount+' '+(dv.currency||'')+' ('+dv.lastDate+') · '+t('dNote')+'</div>';
+  }
   function renderFaBody(){
     var f=AN.fund; if(!f) return '';
     var cur=f.currency||'';
+    // --- Derin analiz sekmeleri (istendiğinde yüklenir) ---
+    if(AN.tab==='score'||AN.tab==='val'||AN.tab==='div'){
+      if(!AN.deep){ loadDeep(AN.sym); return '<div class="fa-load">'+t('anLoading')+'</div>'; }
+      if(AN.tab==='score') return renderScorecard();
+      if(AN.tab==='val') return renderValuation();
+      return renderDividends();
+    }
     if(AN.tab==='prof'){
       var p=f.profile||{}, r=f.ratios||{};
       function row(l,v){ return v?('<div class="fp-r"><span>'+l+'</span><span>'+esc(v)+'</span></div>'):''; }
@@ -1502,6 +1801,18 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
         row(t('fpCountry'), p.country)+row(t('fpCap'), bigNum(r.marketCap,f.tradeCurrency||''))+
         row(t('fpWeb'), p.website)+
         (p.summary?'<div class="fp-s">'+esc(p.summary)+'</div>':'')+'</div>';
+    }
+    if(AN.tab==='est'){
+      var g=f.growth||{}; var order=[['0q','esQ0'],['+1q','esQ1'],['0y','esY0'],['+1y','esY1']];
+      var rows=order.filter(function(o){ return g[o[0]]; }).map(function(o){
+        var v=g[o[0]]; var gr=v.growth!=null?v.growth*100:null;
+        return '<tr><td>'+t(o[1])+'</td><td>'+(v.epsEstimate!=null?v.epsEstimate.toFixed(2):'—')+
+          '</td><td>'+bigNum(v.revEstimate,'')+'</td><td class="'+(gr==null?'':(gr>=0?'pos':'neg'))+'">'+
+          (gr!=null?pctTxt(gr):'—')+'</td></tr>'; }).join('');
+      if(!rows) return '<div class="an-empty">'+t('anNoData')+'</div>';
+      return '<div class="fa-scroll"><table class="fa"><thead><tr><th>'+t('faPeriod')+'</th><th>'+t('faEpsEst')+
+        '</th><th>'+t('faRevEst')+'</th><th>'+t('faGrowth')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+        '<div class="fa-note">'+t('faEstNote')+'</div>';
     }
     if(AN.tab==='earn'){
       var eh=f.earningsHistory||[];
@@ -1514,25 +1825,87 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
             (sp!=null?pctTxt(sp,1):'—')+'</td></tr>'; }).join('')+'</tbody></table></div>'+
         '<div class="fa-note">'+t('faEarnNote')+'</div>';
     }
-    var map={inc:['income',[['totalRevenue','fiRev'],['grossProfit','fiGross'],['operatingIncome','fiOp'],['netIncome','fiNet']]],
-             bal:['balance',[['totalAssets','fiAssets'],['totalLiab','fiLiab'],['totalStockholderEquity','fiEquity'],['cash','fiCash'],['longTermDebt','fiDebt']]],
-             cf:['cashflow',[['totalCashFromOperatingActivities','fiOpCf'],['capitalExpenditures','fiCapex'],['dividendsPaid','fiDiv']]]};
+    // ---- Mali tablolar: sıkışık tablo yerine anlaşılır kartlar ----
+    var map={
+      inc:['income',[['totalRevenue','fiRev','money'],['grossProfit','fiGross','money'],
+                     ['operatingIncome','fiOp','money'],['ebitda','fiEbitda','money'],
+                     ['netIncome','fiNet','money'],['eps','fiEps','plain']]],
+      bal:['balance',[['totalAssets','fiAssets','money'],['totalLiab','fiLiab','money'],
+                      ['totalStockholderEquity','fiEquity','money'],['cash','fiCash','money'],
+                      ['longTermDebt','fiDebt','money']]],
+      cf:['cashflow',[['totalCashFromOperatingActivities','fiOpCf','money'],
+                      ['capitalExpenditures','fiCapex','money'],
+                      ['freeCashFlow','fiFcf','money'],['netIncome','fiNet','money']]]};
     var cfg=map[AN.tab]; if(!cfg) return '';
     var data=(f[cfg[0]]||{})[AN.period]||[];
     if(!data.length){ data=(f[cfg[0]]||{}).annual||[]; }
     if(!data.length) return '<div class="an-empty">'+t('anNoData')+'</div>';
-    var head='<tr><th>'+t('faItem')+'</th>'+data.map(function(d){return '<th>'+esc((d.date||'').slice(0,7))+'</th>';}).join('')+'</tr>';
-    // Yahoo bazı alanları boş/sıfır döndürür — tamamen boş satırları gösterme
-    var body=cfg[1].filter(function(fl){
-      return data.some(function(d){ var v=d[fl[0]]; return v!=null && !isNaN(v) && v!==0; });
+    // --- Veri tazeliği uyarısı: Yahoo son çeyreği henüz işlemediyse dürüstçe söyle ---
+    var fresh='';
+    if(AN.tab!=='prof'){
+      var newestStmt=(data[0]||{}).date||'';
+      var eh=(f.earningsHistory||[]).filter(function(e){return e.actual!=null;});
+      var newestEarn=eh.length?eh[0]:null;
+      var stale = newestEarn && newestEarn.quarter && newestStmt && newestEarn.quarter > newestStmt;
+      if(stale && AN.period==='quarterly'){
+        var sp=newestEarn.surprisePct!=null?newestEarn.surprisePct*100:null;
+        fresh='<div class="stale"><b>⚠️ '+t('stTitle')+'</b><div class="st-b">'+
+          t('stBody',{q:newestEarn.quarter, s:newestStmt})+'</div>'+
+          '<div class="st-e">'+t('stEps')+': <b>'+newestEarn.actual.toFixed(2)+'</b>'+
+          (newestEarn.estimate!=null?(' · '+t('faEst')+' '+newestEarn.estimate.toFixed(2)):'')+
+          (sp!=null?(' · <span class="'+(sp>=0?'pos':'neg')+'">'+pctTxt(sp,1)+'</span>'):'')+'</div></div>';
+      } else if(newestStmt){
+        fresh='<div class="asof">'+t('stAsOf')+': <b>'+esc(newestStmt)+'</b></div>';
+      }
+    }
+    var per=[['quarterly','faQ'],['annual','faY']].map(function(pp){
+      return '<button class="fa-per'+(AN.period===pp[0]?' on':'')+'" data-per="'+pp[0]+'">'+t(pp[1])+'</button>'; }).join('');
+    var cards=cfg[1].filter(function(fl){
+      return data.some(function(x){ var v=x[fl[0]]; return v!=null && !isNaN(v) && v!==0; });
     }).map(function(fl){
-      return '<tr><td>'+t(fl[1])+'</td>'+data.map(function(d){ return '<td>'+bigNum(d[fl[0]],'')+'</td>'; }).join('')+'</tr>';
+      var key=fl[0], lbl=t(fl[1]), kind=fl[2];
+      var vals=data.map(function(x){ return x[key]; });
+      var cur=vals[0], prev=vals.length>1?vals[1]:null, yr=vals.length>3?vals[3]:null;
+      function pc(a,b){ return (a!=null&&b!=null&&b!==0)?((a-b)/Math.abs(b)*100):null; }
+      var gP=pc(cur,prev), gY=(AN.period==='quarterly')?pc(cur,yr):null;
+      var fmt=function(v){ return kind==='money'?bigNum(v,''):(v!=null?v.toFixed(2):'—'); };
+      var ordered=vals.slice().reverse();
+      var fin=ordered.filter(function(v){return v!=null&&!isNaN(v);});
+      var mx=Math.max.apply(null,fin.map(Math.abs))||1;
+      var bars=ordered.map(function(v,i){
+        var h=(v==null)?4:Math.max(5,Math.abs(v)/mx*100);
+        var neg=(v!=null&&v<0), lastOne=(i===ordered.length-1);
+        var dt=(data[ordered.length-1-i]||{}).date||'';
+        return '<div class="mb-col"><span class="'+(neg?'neg':'')+(lastOne?' now':'')+'" style="height:'+h+'%"></span><em>'+dt.slice(2,7)+'</em></div>';
+      }).join('');
+      function chip(v,lab){ if(v==null) return ''; return '<span class="mc-chip '+(v>=0?'pos':'neg')+'">'+lab+' '+pctTxt(v,1)+'</span>'; }
+      return '<div class="mcard"><div class="mc-top"><span class="mc-l">'+lbl+'</span><span class="mc-v'+((cur!=null&&cur<0)?' neg':'')+'">'+fmt(cur)+'</span></div>'+
+        '<div class="mc-bars">'+bars+'</div><div class="mc-chips">'+chip(gP,t('faVsPrev'))+chip(gY,t('faVsYear'))+'</div></div>';
     }).join('');
-    if(!body) return '<div class="an-empty">'+t('anNoData')+'</div>';
-    return '<div style="display:flex;gap:6px;margin-bottom:9px">'+
-        ['quarterly','annual'].map(function(p){ return '<button class="fa-per btn'+(AN.period===p?' primary':'')+'" data-per="'+p+'" style="padding:5px 11px;font-size:0.68rem">'+t(p==='quarterly'?'faQ':'faY')+'</button>'; }).join('')+'</div>'+
-      '<div class="fa-scroll"><table class="fa"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
-      '<div class="fa-note">'+t('faUnit',{c:cur})+'</div>';
+    if(!cards) return '<div class="an-empty">'+t('anNoData')+'</div>';
+    var marg='';
+    if(AN.tab==='inc' && data[0] && data[0].totalRevenue){
+      var r0=data[0], rev=r0.totalRevenue;
+      var mm=[['grossProfit','fiGrossM'],['operatingIncome','fiOpM'],['netIncome','fiNetM']]
+        .filter(function(x){ return r0[x[0]]!=null && r0[x[0]]!==0; })
+        .map(function(x){ var v=r0[x[0]]/rev*100;
+          return '<div class="mg"><span>'+t(x[1])+'</span><b class="'+(v>=0?'pos':'neg')+'">%'+v.toFixed(1)+'</b></div>'; }).join('');
+      if(mm) marg='<div class="mg-row">'+mm+'</div>';
+    }
+    var fut='';
+    if(AN.tab==='inc'){
+      var g=f.growth||{};
+      var items=[['0q','esQ0'],['+1q','esQ1'],['0y','esY0'],['+1y','esY1']].filter(function(o){return g[o[0]];});
+      if(items.length){
+        fut='<div class="fut"><div class="fut-h">🔮 '+t('faOutlook')+'</div><div class="fut-list">'+
+          items.map(function(o){ var v=g[o[0]]; var gr=v.growth!=null?v.growth*100:null;
+            return '<div class="fut-row"><span class="fr-p">'+t(o[1])+'</span><span class="fr-v">'+bigNum(v.revEstimate,'')+
+              '</span><span class="fr-e">EPS '+(v.epsEstimate!=null?v.epsEstimate.toFixed(2):'—')+
+              '</span><span class="fr-g '+(gr==null?'':(gr>=0?'pos':'neg'))+'">'+(gr!=null?pctTxt(gr,0):'—')+'</span></div>'; }).join('')+
+          '</div><div class="fa-note" style="margin-top:7px">'+t('faEstNote')+'</div></div>';
+      }
+    }
+    return '<div class="fa-per-row">'+per+'</div>'+fresh+cards+marg+fut+'<div class="fa-note">'+t('faUnit',{c:cur})+'</div>';
   }
   document.getElementById('tabbar').addEventListener('click',function(e){
     var b=e.target.closest('[data-screen]'); if(b) switchScreen(b.getAttribute('data-screen')); });
