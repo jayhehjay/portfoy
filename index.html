@@ -343,7 +343,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
 
   @media (max-width:600px){
     body{font-size:13.5px;}
-    header{padding:10px 14px;gap:10px;}
+    header{padding:10px 14px;gap:10px;padding-top:max(10px, env(safe-area-inset-top));}
     .brand h1{font-size:0.82rem;}
     .brand .tag{display:none;}
     .status-line{display:none;}
@@ -393,7 +393,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   .tab.on { color:var(--accent); }
   .tab:active { transform:scale(0.93); }
 
-  .an-header { background:var(--bg); border-bottom:none; padding:14px 22px 6px; }
+  .an-header { background:var(--bg); border-bottom:none; padding:14px 22px 6px; padding-top:max(14px, env(safe-area-inset-top)); }
   .an-search { padding:6px 22px 14px; background:var(--bg); border-bottom:1px solid var(--border); }
   .an-srow { display:flex; gap:8px; }
   #anQuery { flex:1; padding:11px 13px; border-radius:12px; border:1px solid var(--border-strong);
@@ -482,7 +482,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   .fa-load { color:var(--faint); font-size:0.8rem; padding:26px 4px; text-align:center; }
 
   @media (max-width:600px){
-    .an-header { padding:12px 14px 4px; }
+    .an-header { padding:12px 14px 4px; padding-top:max(12px, env(safe-area-inset-top)); }
     .an-search { padding:4px 14px 12px; }
     .an-body { padding:14px 14px 20px; }
     .cs-list { grid-template-columns:1fr; }
@@ -541,7 +541,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   }
 
   /* ============ ARAYÜZ 2.0 ============ */
-  header{ background:var(--bg); border-bottom:none; padding-bottom:4px; }
+  header{ background:var(--bg); border-bottom:none; padding-bottom:4px; padding-top:max(13px, env(safe-area-inset-top)); }
   .brand .mark{ border-radius:3px; box-shadow:0 0 14px rgba(226,180,95,0.4); }
   .btn{ border-radius:12px; }
   .btn.primary{ box-shadow:0 4px 14px rgba(226,180,95,0.25); }
@@ -760,7 +760,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   @media (max-width:600px){ .drawer-body{ max-height:calc(93vh - 76px); } }
   /* ---- MOBİL: üst bölümü sıkıştır (liste hemen görünsün) ---- */
   @media (max-width:600px){
-    header{ padding:8px 12px 6px; gap:8px; }
+    header{ padding:8px 12px 6px; gap:8px; padding-top:max(8px, env(safe-area-inset-top)); }
     .brand h1{ font-size:.76rem; letter-spacing:.14em; }
     .kpis{ margin-top:2px; }
     .kpi{ padding:5px 8px; min-width:0; }
@@ -936,6 +936,9 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
   .menu-btn{ background:var(--panel); border:1px solid var(--border-strong); border-radius:8px;
     color:var(--ink); font-size:1rem; width:34px; height:32px; flex:none; line-height:1; }
   .menu-btn:hover{ border-color:var(--accent-dim); }
+  .menu-btn{ min-width:44px; min-height:40px; display:inline-flex; align-items:center;
+    justify-content:center; flex:0 0 auto; }
+  .menu-btn:active{ background:var(--row-hover); }
   .nav-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0; pointer-events:none;
     transition:opacity .18s; z-index:60; }
   .nav-overlay.show{ opacity:1; pointer-events:auto; }
@@ -946,7 +949,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     display:flex; flex-direction:column; overflow-y:auto; overscroll-behavior:contain; }
   .sidenav.show{ transform:translateX(0); }
   @media (prefers-reduced-motion:reduce){ .sidenav,.nav-overlay{ transition:none; } }
-  .sn-head{ display:flex; align-items:center; gap:9px; padding:15px 14px 12px; border-bottom:1px solid var(--border); }
+  .sn-head{ display:flex; align-items:center; gap:9px; padding:15px 14px 12px; border-bottom:1px solid var(--border); padding-top:max(15px, env(safe-area-inset-top)); }
   .sn-head .mark{ width:9px; height:9px; border-radius:2px; background:var(--accent); transform:rotate(45deg); }
   .sn-head b{ font-size:.78rem; letter-spacing:.16em; }
   .sn-head .drawer-close{ margin-left:auto; }
