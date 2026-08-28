@@ -711,6 +711,55 @@ def fetch_hist(sym, rng):
     pts = [{"t": ts[i], "c": round(cl[i], 4)} for i in range(min(len(ts), len(cl))) if cl[i] is not None]
     return {"ok": True, "points": pts, "currency": res.get("meta", {}).get("currency")}
 
+# ================= TRADE RADARI: SEVIYE HARITASI (ATR + destek/direnc) =================
+def fetch_levels(sym):
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=3mo" % urllib.parse.quote(sym)
+    res = json.load(_open(url))["chart"]["result"][0]
+    q = res.get("indicators", {}).get("quote", [{}])[0]
+    hi, lo, cl, vo = q.get("high") or [], q.get("low") or [], q.get("close") or [], q.get("volume") or []
+    bars = []
+    for i in range(len(cl)):
+        if cl[i] is None or hi[i] is None or lo[i] is None:
+            continue
+        bars.append({"h": hi[i], "l": lo[i], "c": cl[i], "v": (vo[i] if i < len(vo) else None) or 0})
+    if len(bars) < 20:
+        return {"ok": False, "error": "yetersiz veri"}
+    price = bars[-1]["c"]
+    # ATR14
+    trs = []
+    for i in range(1, len(bars)):
+        pc = bars[i-1]["c"]
+        trs.append(max(bars[i]["h"] - bars[i]["l"], abs(bars[i]["h"] - pc), abs(bars[i]["l"] - pc)))
+    atr = sum(trs[-14:]) / min(14, len(trs))
+    # pivot dip/tepeler (2 sag 2 sol)
+    sups, ress = [], []
+    for i in range(2, len(bars) - 2):
+        w = bars[i-2:i+3]
+        if bars[i]["l"] == min(x["l"] for x in w):
+            sups.append(bars[i]["l"])
+        if bars[i]["h"] == max(x["h"] for x in w):
+            ress.append(bars[i]["h"])
+    def near_dedup(vals):
+        out = []
+        for v in sorted(vals):
+            if not out or abs(v - out[-1]) / max(out[-1], 1e-9) > 0.01:
+                out.append(v)
+            else:
+                out[-1] = (out[-1] + v) / 2.0
+        return out
+    sups = [v for v in near_dedup(sups) if v < price][-3:]
+    ress = [v for v in near_dedup(ress) if v > price][:3]
+    avgv = sum(b["v"] for b in bars[-20:]) / 20.0
+    lastv = bars[-1]["v"]
+    rng20 = sum((b["h"] - b["l"]) / b["c"] * 100 for b in bars[-20:] if b["c"]) / 20.0
+    return {"ok": True, "price": price, "atr": atr, "atrPct": atr / price * 100 if price else None,
+            "supports": [round(x, 3) for x in reversed(sups)],
+            "resistances": [round(x, 3) for x in ress],
+            "avgVol": avgv, "lastVol": lastv,
+            "volX": (lastv / avgv) if avgv else None,
+            "dayRangePct": rng20,
+            "currency": res.get("meta", {}).get("currency")}
+
 _fx_cache = {"t": 0, "data": None}
 def fetch_fx():
     now = time.time()
@@ -745,6 +794,80 @@ def fetch_news(sym):
             return _clean(mm.group(1)) if mm else ""
         items.append({"title": ex("title"), "link": ex("link"), "date": ex("pubDate")})
     return {"ok": True, "items": items}
+
+# ================= HABER AKISI + BASIT DUYGU ANALIZI =================
+POS_WORDS = [
+    "beat","beats","surge","surges","soar","soars","jump","jumps","rally","rallies","record",
+    "upgrade","upgrades","raises","raised","boost","boosts","strong","growth","profit","wins",
+    "win","approval","approved","expands","expansion","buyback","dividend increase","outperform",
+    "higher","gains","gain","top","tops","bullish","optimistic","recovery","deal","acquires",
+]
+NEG_WORDS = [
+    "miss","misses","plunge","plunges","slump","slumps","falls","fall","drop","drops","sinks",
+    "downgrade","downgrades","cuts","cut","warns","warning","weak","loss","losses","lawsuit",
+    "probe","investigation","recall","delay","delays","halt","halts","layoff","layoffs","fine",
+    "fraud","bearish","concern","concerns","slashes","lower","decline","declines","bankruptcy",
+    "resign","resigns","strike","short seller",
+]
+TOPIC_WORDS = {
+    "earnings": ["earnings","quarter","q1","q2","q3","q4","results","revenue","eps","guidance"],
+    "analyst":  ["analyst","upgrade","downgrade","price target","rating","initiated"],
+    "dividend": ["dividend","buyback","payout","distribution"],
+    "mna":      ["acquire","acquisition","merger","stake","takeover","bid","deal"],
+    "legal":    ["lawsuit","probe","investigation","court","fine","settlement","regulator"],
+    "product":  ["launch","product","contract","order","partnership","approval","trial"],
+}
+
+def score_headline(title):
+    tl = " " + title.lower() + " "
+    pos = sum(1 for w in POS_WORDS if (" " + w + " ") in tl or (" " + w + ",") in tl)
+    neg = sum(1 for w in NEG_WORDS if (" " + w + " ") in tl or (" " + w + ",") in tl)
+    topics = [k for k, ws in TOPIC_WORDS.items() if any(w in tl for w in ws)]
+    if pos > neg:
+        tone = "pos"
+    elif neg > pos:
+        tone = "neg"
+    else:
+        tone = "neu"
+    return {"tone": tone, "score": pos - neg, "topics": topics}
+
+def fetch_newsfeed(syms, per=4):
+    syms = [s for s in syms if s][:14]
+    out = {}
+    lock = threading.Lock()
+
+    def one(s):
+        try:
+            r = fetch_news(s)
+            items = []
+            for it in (r.get("items") or [])[:per]:
+                sc = score_headline(it.get("title") or "")
+                it = dict(it); it.update(sc); it["symbol"] = s
+                items.append(it)
+            with lock:
+                out[s] = items
+        except Exception:
+            with lock:
+                out[s] = []
+
+    ths = [threading.Thread(target=one, args=(s,)) for s in syms]
+    for t in ths:
+        t.start()
+    for t in ths:
+        t.join(timeout=12)
+
+    flat = []
+    for s in syms:
+        flat.extend(out.get(s) or [])
+    pos = sum(1 for x in flat if x["tone"] == "pos")
+    neg = sum(1 for x in flat if x["tone"] == "neg")
+    topc = {}
+    for x in flat:
+        for tp in x["topics"]:
+            topc[tp] = topc.get(tp, 0) + 1
+    return {"ok": True, "items": flat, "count": len(flat),
+            "pos": pos, "neg": neg, "neu": len(flat) - pos - neg,
+            "topics": sorted(topc.items(), key=lambda kv: -kv[1])}
 
 EX_COUNTRY = {
     "Stockholm": "🇸🇪", "Oslo": "🇳🇴", "Helsinki": "🇫🇮", "Copenhagen": "🇩🇰",
@@ -818,6 +941,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_fx())
                 except Exception as e:
                     return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/newsfeed":
+                try:
+                    ss = [x.strip() for x in (qs.get("s") or [""])[0].split(",") if x.strip()]
+                    return _json(self, fetch_newsfeed(ss))
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/search":
                 q = (qs.get("q") or [""])[0].strip()
                 try:
@@ -858,6 +987,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_deep(sym))
                 if p.path == "/api/fundamentals":
                     return _json(self, fetch_fundamentals(sym))
+                if p.path == "/api/levels":
+                    return _json(self, fetch_levels(sym))
                 if p.path == "/api/hist":
                     return _json(self, fetch_hist(sym, (qs.get("range") or ["6mo"])[0]))
             except Exception as e:
