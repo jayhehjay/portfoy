@@ -760,6 +760,245 @@ def fetch_levels(sym):
             "dayRangePct": rng20,
             "currency": res.get("meta", {}).get("currency")}
 
+
+# ================= PROFESYONEL TEKNIK ANALIZ (/api/ta) =================
+def _sma_series(v, n):
+    out = [None] * len(v)
+    if len(v) < n:
+        return out
+    s = sum(v[:n]); out[n-1] = s / n
+    for i in range(n, len(v)):
+        s += v[i] - v[i-n]; out[i] = s / n
+    return out
+
+def _stdev(v, n, i):
+    if i + 1 < n:
+        return None
+    w = v[i-n+1:i+1]; m = sum(w) / n
+    return (sum((x - m) ** 2 for x in w) / n) ** 0.5
+
+def _rsi_series(v, n=14):
+    out = [None] * len(v)
+    if len(v) < n + 1:
+        return out
+    g = [0.0] * len(v); l = [0.0] * len(v)
+    for i in range(1, len(v)):
+        ch = v[i] - v[i-1]
+        g[i] = max(ch, 0.0); l[i] = max(-ch, 0.0)
+    ag = sum(g[1:n+1]) / n; al = sum(l[1:n+1]) / n
+    out[n] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    for i in range(n + 1, len(v)):
+        ag = (ag * (n - 1) + g[i]) / n; al = (al * (n - 1) + l[i]) / n
+        out[i] = 100.0 if al == 0 else 100 - 100 / (1 + ag / al)
+    return out
+
+def _stoch(hi, lo, cl, n=14, d=3):
+    k = [None] * len(cl)
+    for i in range(n - 1, len(cl)):
+        hh = max(hi[i-n+1:i+1]); ll = min(lo[i-n+1:i+1])
+        k[i] = 50.0 if hh == ll else (cl[i] - ll) / (hh - ll) * 100
+    ks = [x for x in k if x is not None]
+    dv = _sma_series(ks, d) if len(ks) >= d else []
+    return (k[-1] if k else None), (dv[-1] if dv else None)
+
+def _cci(hi, lo, cl, n=20):
+    tp = [(hi[i] + lo[i] + cl[i]) / 3.0 for i in range(len(cl))]
+    if len(tp) < n:
+        return None
+    w = tp[-n:]; m = sum(w) / n
+    md = sum(abs(x - m) for x in w) / n
+    return None if md == 0 else (tp[-1] - m) / (0.015 * md)
+
+def _williams(hi, lo, cl, n=14):
+    if len(cl) < n:
+        return None
+    hh = max(hi[-n:]); ll = min(lo[-n:])
+    return None if hh == ll else (hh - cl[-1]) / (hh - ll) * -100
+
+def _atr_series(hi, lo, cl, n=14):
+    tr = [None]
+    for i in range(1, len(cl)):
+        tr.append(max(hi[i] - lo[i], abs(hi[i] - cl[i-1]), abs(lo[i] - cl[i-1])))
+    out = [None] * len(cl)
+    vals = [x for x in tr if x is not None]
+    if len(vals) < n:
+        return out
+    a = sum(vals[:n]) / n; out[n] = a
+    for i in range(n + 1, len(cl)):
+        a = (a * (n - 1) + tr[i]) / n; out[i] = a
+    return out
+
+def _adx(hi, lo, cl, n=14):
+    if len(cl) < n * 2:
+        return None
+    pdm = []; ndm = []; tr = []
+    for i in range(1, len(cl)):
+        up = hi[i] - hi[i-1]; dw = lo[i-1] - lo[i]
+        pdm.append(up if (up > dw and up > 0) else 0.0)
+        ndm.append(dw if (dw > up and dw > 0) else 0.0)
+        tr.append(max(hi[i] - lo[i], abs(hi[i] - cl[i-1]), abs(lo[i] - cl[i-1])))
+    def smooth(x):
+        s = sum(x[:n]); out = [s]
+        for i in range(n, len(x)):
+            s = s - s / n + x[i]; out.append(s)
+        return out
+    st, sp, sn = smooth(tr), smooth(pdm), smooth(ndm)
+    dx = []
+    for i in range(len(st)):
+        if st[i] == 0:
+            continue
+        pdi = sp[i] / st[i] * 100; ndi = sn[i] / st[i] * 100
+        if pdi + ndi:
+            dx.append(abs(pdi - ndi) / (pdi + ndi) * 100)
+    if len(dx) < n:
+        return None
+    return sum(dx[-n:]) / n
+
+def _obv(cl, vo):
+    o = 0.0; out = [0.0]
+    for i in range(1, len(cl)):
+        if cl[i] > cl[i-1]:
+            o += vo[i]
+        elif cl[i] < cl[i-1]:
+            o -= vo[i]
+        out.append(o)
+    return out
+
+def fetch_ta(sym, rng="6mo", iv="1d", bars=70):
+    iv = iv if iv in ("1d", "1wk", "1mo") else "1d"
+    try:
+        bars = max(20, min(400, int(bars)))
+    except Exception:
+        bars = 70
+    # gostergeler icin genis veri cek (200 periyotluk ortalama gerekli), gosterimde kirp
+    span = {"1d": "5y", "1wk": "10y", "1mo": "max"}[iv]
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s"
+           % (urllib.parse.quote(sym), iv, span))
+    res = json.load(_open(url))["chart"]["result"][0]
+    meta = res.get("meta", {}) or {}
+    ts = res.get("timestamp") or []
+    q = res.get("indicators", {}).get("quote", [{}])[0]
+    O, H, L, C, V = (q.get("open") or [], q.get("high") or [], q.get("low") or [],
+                     q.get("close") or [], q.get("volume") or [])
+    T, o_, h_, l_, c_, v_ = [], [], [], [], [], []
+    for i in range(min(len(ts), len(C))):
+        if C[i] is None or H[i] is None or L[i] is None or O[i] is None:
+            continue
+        T.append(ts[i]); o_.append(O[i]); h_.append(H[i]); l_.append(L[i]); c_.append(C[i])
+        v_.append((V[i] if i < len(V) else 0) or 0)
+    if len(c_) < 60:
+        return {"ok": False, "error": "yetersiz veri"}
+
+    price = c_[-1]
+    sma = {n: _sma_series(c_, n) for n in (10, 20, 30, 50, 100, 200)}
+    e12 = _ema_series(c_, 12); e26 = _ema_series(c_, 26)
+    macd_line = [a - b for a, b in zip(e12, e26)]
+    macd_sig = _ema_series(macd_line, 9)
+    rsi_s = _rsi_series(c_, 14)
+    atr_s = _atr_series(h_, l_, c_, 14)
+    obv_s = _obv(c_, v_)
+    bb_mid = sma[20]
+    sd = _stdev(c_, 20, len(c_) - 1)
+    bb_up = (bb_mid[-1] + 2 * sd) if (bb_mid[-1] is not None and sd is not None) else None
+    bb_dn = (bb_mid[-1] - 2 * sd) if (bb_mid[-1] is not None and sd is not None) else None
+    bb_w = ((bb_up - bb_dn) / bb_mid[-1] * 100) if (bb_up and bb_mid[-1]) else None
+    k, dd = _stoch(h_, l_, c_)
+    vol20 = _sma_series([float(x) for x in v_], 20)
+    vol_x = (v_[-1] / vol20[-1]) if (vol20[-1]) else None
+    obv_trend = None
+    if len(obv_s) > 21:
+        obv_trend = "up" if obv_s[-1] > obv_s[-21] else ("down" if obv_s[-1] < obv_s[-21] else "flat")
+
+    # --- sinyal sayimi (TradingView mantigina benzer, notr dille) ---
+    ma_sig = []
+    for n in (10, 20, 30, 50, 100, 200):
+        mv = sma[n][-1]
+        if mv is None:
+            continue
+        ma_sig.append({"name": "MA%d" % n, "value": round(mv, 4),
+                       "signal": "up" if price > mv else ("down" if price < mv else "neutral")})
+    osc = []
+    r = rsi_s[-1]
+    if r is not None:
+        osc.append({"name": "RSI(14)", "value": round(r, 1),
+                    "signal": "down" if r > 70 else ("up" if r < 30 else "neutral")})
+    if macd_line and macd_sig:
+        hist = macd_line[-1] - macd_sig[-1]
+        osc.append({"name": "MACD(12,26,9)", "value": round(hist, 4),
+                    "signal": "up" if hist > 0 else ("down" if hist < 0 else "neutral")})
+    if k is not None:
+        osc.append({"name": "Stochastic %K", "value": round(k, 1),
+                    "signal": "down" if k > 80 else ("up" if k < 20 else "neutral")})
+    cci = _cci(h_, l_, c_)
+    if cci is not None:
+        osc.append({"name": "CCI(20)", "value": round(cci, 1),
+                    "signal": "down" if cci > 100 else ("up" if cci < -100 else "neutral")})
+    wr = _williams(h_, l_, c_)
+    if wr is not None:
+        osc.append({"name": "Williams %R", "value": round(wr, 1),
+                    "signal": "down" if wr > -20 else ("up" if wr < -80 else "neutral")})
+    if len(c_) > 11:
+        mom = c_[-1] - c_[-11]
+        osc.append({"name": "Momentum(10)", "value": round(mom, 4),
+                    "signal": "up" if mom > 0 else ("down" if mom < 0 else "neutral")})
+    adx = _adx(h_, l_, c_)
+
+    def tally(rows):
+        u = sum(1 for x in rows if x["signal"] == "up")
+        dn = sum(1 for x in rows if x["signal"] == "down")
+        nt = sum(1 for x in rows if x["signal"] == "neutral")
+        return {"up": u, "down": dn, "neutral": nt, "total": len(rows)}
+    ma_t, os_t = tally(ma_sig), tally(osc)
+    tot_u = ma_t["up"] + os_t["up"]; tot_d = ma_t["down"] + os_t["down"]
+    tot_n = ma_t["neutral"] + os_t["neutral"]; tot = tot_u + tot_d + tot_n
+    ratio = ((tot_u - tot_d) / tot) if tot else 0
+    if ratio >= 0.5:   summary = "strong_up"
+    elif ratio >= 0.15: summary = "up"
+    elif ratio <= -0.5: summary = "strong_down"
+    elif ratio <= -0.15: summary = "down"
+    else:               summary = "neutral"
+
+    # --- grafik verisi (istenen bar sayisi kadar) ---
+    s = max(0, len(c_) - bars)
+    def cut(arr):
+        return [None if x is None else round(x, 4) for x in arr[s:]]
+    bars = [{"t": T[i], "o": round(o_[i], 4), "h": round(h_[i], 4),
+             "l": round(l_[i], 4), "c": round(c_[i], 4), "v": v_[i]} for i in range(s, len(c_))]
+    # fibonacci (gosterilen aralikta)
+    seg_h = max(h_[s:]); seg_l = min(l_[s:])
+    fib = {("%.3f" % lv): round(seg_h - (seg_h - seg_l) * lv, 4)
+           for lv in (0.236, 0.382, 0.5, 0.618, 0.786)}
+
+    # devam eden hafta/ay barinin hacmi Yahoo'da eksik gelir -> isaretle
+    partial = False
+    if iv in ("1wk", "1mo") and T:
+        lt = time.gmtime(T[-1]); nw = time.gmtime()
+        if iv == "1mo":
+            partial = (lt.tm_year == nw.tm_year and lt.tm_mon == nw.tm_mon)
+        else:
+            partial = (time.time() - T[-1]) < 7 * 86400
+
+    return {"ok": True, "symbol": sym, "range": rng, "interval": iv, "partialLast": partial,
+            "currency": meta.get("currency"), "name": meta.get("longName") or meta.get("shortName"),
+            "price": price, "bars": bars,
+            "series": {"ma20": cut(sma[20]), "ma50": cut(sma[50]), "ma200": cut(sma[200]),
+                       "rsi": cut(rsi_s), "macd": cut(macd_line), "signal": cut(macd_sig),
+                       "volMa": cut(vol20)},
+            "ma": ma_sig, "osc": osc, "maTally": ma_t, "oscTally": os_t,
+            "summary": summary, "score": round(ratio, 3),
+            "rsi": (round(r, 1) if r is not None else None),
+            "adx": (round(adx, 1) if adx is not None else None),
+            "atr": (round(atr_s[-1], 4) if atr_s[-1] is not None else None),
+            "atrPct": (round(atr_s[-1] / price * 100, 2) if (atr_s[-1] and price) else None),
+            "bb": {"upper": (round(bb_up, 4) if bb_up else None),
+                   "mid": (round(bb_mid[-1], 4) if bb_mid[-1] else None),
+                   "lower": (round(bb_dn, 4) if bb_dn else None),
+                   "width": (round(bb_w, 2) if bb_w else None)},
+            "volume": {"last": v_[-1], "avg20": (round(vol20[-1]) if vol20[-1] else None),
+                       "x": (round(vol_x, 2) if vol_x else None), "obvTrend": obv_trend},
+            "hi52": round(max(c_[-260:]), 4), "lo52": round(min(c_[-260:]), 4),
+            "fib": fib}
+
 _fx_cache = {"t": 0, "data": None}
 def fetch_fx():
     now = time.time()
@@ -987,6 +1226,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_deep(sym))
                 if p.path == "/api/fundamentals":
                     return _json(self, fetch_fundamentals(sym))
+                if p.path == "/api/ta":
+                    return _json(self, fetch_ta(sym, (qs.get("range") or ["6mo"])[0],
+                                                (qs.get("iv") or ["1d"])[0],
+                                                (qs.get("bars") or ["70"])[0]))
                 if p.path == "/api/levels":
                     return _json(self, fetch_levels(sym))
                 if p.path == "/api/hist":
