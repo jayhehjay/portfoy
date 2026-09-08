@@ -978,7 +978,18 @@ def fetch_ta(sym, rng="6mo", iv="1d", bars=70):
         else:
             partial = (time.time() - T[-1]) < 7 * 86400
 
+    # donem getirileri (gunluk kapanislardan; haftalik/aylik gorunumde de dogru)
+    def ret_over(bars_back):
+        if len(c_) <= bars_back:
+            return None
+        old = c_[-1 - bars_back]
+        return round((price - old) / old * 100, 2) if old else None
+    per = {"1d": 1, "1wk": 5, "1mo": 21}[iv]
+    rets = {"m1": ret_over(int(21 / per)), "m3": ret_over(int(63 / per)),
+            "m6": ret_over(int(126 / per)), "y1": ret_over(int(252 / per))}
+
     return {"ok": True, "symbol": sym, "range": rng, "interval": iv, "partialLast": partial,
+            "returns": rets,
             "currency": meta.get("currency"), "name": meta.get("longName") or meta.get("shortName"),
             "price": price, "bars": bars,
             "series": {"ma20": cut(sma[20]), "ma50": cut(sma[50]), "ma200": cut(sma[200]),
