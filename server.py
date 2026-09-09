@@ -1084,10 +1084,35 @@ def _yahoo_search_news(name, limit=6):
                     "date": "", "ts": int(ts), "source": n.get("publisher") or ""})
     return [x for x in out if x["title"]]
 
-def fetch_news(sym, name=None, per=6):
+GNEWS_LOCALE = {
+    "en": ("en-US", "US", "US:en"),
+    "tr": ("tr", "TR", "TR:tr"),
+    "sv": ("sv", "SE", "SE:sv"),
+}
+
+def fetch_news(sym, name=None, per=6, lang="en"):
     """Uc kaynak: Yahoo RSS (sembol) + Yahoo arama + Google News (isim).
     Nordic hisselerde Yahoo RSS haftalarca eski kalir; Google News gunluk getirir."""
     items = []
+    # Ingilizce disi bir dil secildiyse ONCE o dilde ara; yeterliyse sadece onu goster
+    if name and lang != "en":
+        hl, gl, ceid = GNEWS_LOCALE.get(lang, GNEWS_LOCALE["en"])
+        words0 = [w for w in re.split(r"[^A-Za-zÅÄÖåäö0-9]+", name) if len(w) >= 4]
+        key0 = max(words0, key=len).lower() if words0 else name.lower()
+        loc = [it for it in _rss_items(
+            "https://news.google.com/rss/search?q=%s&hl=%s&gl=%s&ceid=%s"
+            % (urllib.parse.quote('"' + name + '"'), hl, gl, urllib.parse.quote(ceid)), limit=14)
+            if key0 in it["title"].lower()]
+        if len(loc) >= 2:
+            seen0, uq = set(), []
+            for it in loc:
+                k0 = re.sub(r"[^a-z0-9]", "", it["title"].lower())[:60]
+                if k0 and k0 not in seen0:
+                    seen0.add(k0); uq.append(it)
+            uq.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+            for it in uq:
+                it["lang"] = lang
+            return {"ok": True, "items": uq[:per], "now": int(time.time()), "lang": lang}
     items += _rss_items(
         "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
         % urllib.parse.quote(sym))
@@ -1096,10 +1121,12 @@ def fetch_news(sym, name=None, per=6):
         # -> basligin icinde sirket adi gecmeyenleri ele
         words = [w for w in re.split(r"[^A-Za-zÅÄÖåäö0-9]+", name) if len(w) >= 4]
         key = max(words, key=len).lower() if words else name.lower()
-        cand = _yahoo_search_news(name)
+        cand = _yahoo_search_news(name) if lang == "en" else []
+        hl, gl, ceid = GNEWS_LOCALE.get(lang, GNEWS_LOCALE["en"])
+        q = '"' + name + '"' + (" stock" if lang == "en" else "")
         cand += _rss_items(
-            "https://news.google.com/rss/search?q=%s&hl=en-US&gl=US&ceid=US:en"
-            % urllib.parse.quote('"' + name + '" stock'), limit=10)
+            "https://news.google.com/rss/search?q=%s&hl=%s&gl=%s&ceid=%s"
+            % (urllib.parse.quote(q), hl, gl, urllib.parse.quote(ceid)), limit=12)
         items += [it for it in cand if key in it["title"].lower()]
     seen, uniq = set(), []
     for it in items:
@@ -1109,7 +1136,12 @@ def fetch_news(sym, name=None, per=6):
         seen.add(k)
         uniq.append(it)
     uniq.sort(key=lambda x: x.get("ts") or 0, reverse=True)
-    return {"ok": True, "items": uniq[:per], "now": int(time.time())}
+    for it in uniq:
+        it["lang"] = "en"
+        if lang != "en":
+            it["fallback"] = True
+    return {"ok": True, "items": uniq[:per], "now": int(time.time()),
+            "lang": "en", "fallback": (lang != "en")}
 
 POS_WORDS = [
     "beat","beats","surge","surges","soar","soars","jump","jumps","rally","rallies","record",
@@ -1146,7 +1178,7 @@ def score_headline(title):
         tone = "neu"
     return {"tone": tone, "score": pos - neg, "topics": topics}
 
-def fetch_newsfeed(syms, per=4):
+def fetch_newsfeed(syms, per=4, lang="en"):
     pairs = []
     for s in syms[:14]:
         if not s:
@@ -1163,7 +1195,7 @@ def fetch_newsfeed(syms, per=4):
 
     def one(s):
         try:
-            r = fetch_news(s, names.get(s), per=per + 2)
+            r = fetch_news(s, names.get(s), per=per + 2, lang=lang)
             items = []
             for it in (r.get("items") or [])[:per]:
                 sc = score_headline(it.get("title") or "")
@@ -1248,6 +1280,143 @@ def fetch_sectors():
             "breadth": {f: sum(1 for r in rows if (r.get(f) or 0) > 0) for f in ("d1", "w1", "m1")},
             "count": len(rows)}
 
+# ================= PORTFOY vs ENDEKS KARSILASTIRMASI (/api/perf) =================
+def _daily_closes(sym, rng="1y"):
+    """gun -> kapanis sozlugu (YYYY-MM-DD)."""
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s"
+           % (urllib.parse.quote(sym), rng))
+    res = json.load(_open(url))["chart"]["result"][0]
+    ts = res.get("timestamp") or []
+    cl = res.get("indicators", {}).get("quote", [{}])[0].get("close") or []
+    cur = (res.get("meta") or {}).get("currency") or "SEK"
+    out = {}
+    last = None
+    for i in range(min(len(ts), len(cl))):
+        v = cl[i]
+        if v is None:
+            v = last
+        if v is None:
+            continue
+        last = v
+        out[time.strftime("%Y-%m-%d", time.gmtime(ts[i]))] = v
+    return out, cur
+
+def fetch_perf(holdings, rng="1y", bench=None):
+    """holdings: [(sembol, adet), ...] -> gunluk SEK portfoy degeri, endekslerle normalize."""
+    bench = bench or ["^GSPC", "^IXIC", "^OMX"]
+    rng = rng if rng in ("1mo", "3mo", "6mo", "1y", "2y", "5y") else "1y"
+    need_fx = set()
+    series, lock = {}, threading.Lock()
+
+    def grab(sym, key):
+        try:
+            s, cur = _daily_closes(sym, rng)
+        except Exception:
+            s, cur = {}, "SEK"
+        with lock:
+            series[key] = {"data": s, "ccy": cur}
+            if cur and cur != "SEK":
+                need_fx.add(cur)
+
+    ths = [threading.Thread(target=grab, args=(s, s)) for s, q in holdings]
+    ths += [threading.Thread(target=grab, args=(b, b)) for b in bench]
+    for t_ in ths:
+        t_.start()
+    for t_ in ths:
+        t_.join(timeout=20)
+
+    # gerekli kurlarin gunluk gecmisi (dogru cevrim icin)
+    fx = {}
+    fxth = []
+    def grabfx(c):
+        try:
+            s, _ = _daily_closes("%sSEK=X" % c, rng)
+        except Exception:
+            s = {}
+        with lock:
+            fx[c] = s
+    for c in list(need_fx):
+        th = threading.Thread(target=grabfx, args=(c,)); fxth.append(th); th.start()
+    for th in fxth:
+        th.join(timeout=15)
+
+    def rate(ccy, day, fallback):
+        if ccy == "SEK":
+            return 1.0
+        s = fx.get(ccy) or {}
+        if day in s:
+            return s[day]
+        return fallback.get(ccy) or 1.0
+
+    # son bilinen kurlar (bosluklar icin)
+    lastfx = {}
+    for c, s in fx.items():
+        if s:
+            lastfx[c] = s[sorted(s.keys())[-1]]
+
+    # portfoyun islem gunleri: en cok veri iceren varligin gunleri
+    hold_keys = [s for s, q in holdings if series.get(s, {}).get("data")]
+    if not hold_keys:
+        return {"ok": False, "error": "veri yok"}
+    days = sorted(set().union(*[set(series[k]["data"].keys()) for k in hold_keys]))
+    if len(days) < 5:
+        return {"ok": False, "error": "yetersiz veri"}
+
+    qty = {s: q for s, q in holdings}
+    # Her varligi tum gunlere yay: eksik gunde son bilinen fiyat, basta ise ilk bilinen fiyat.
+    # (Fonlar gunluk fiyat vermez; doldurmazsak toplam yapay olarak duser.)
+    filled = {}
+    for k in hold_keys:
+        s = series[k]["data"]
+        ks = sorted(s.keys())
+        if not ks:
+            continue
+        first_v = s[ks[0]]
+        col, last_v = [], None
+        for day in days:
+            if day in s:
+                last_v = s[day]
+            col.append(last_v if last_v is not None else first_v)
+        filled[k] = col
+
+    port = []
+    for i, day in enumerate(days):
+        tot = 0.0
+        for k, col in filled.items():
+            tot += col[i] * qty.get(k, 0) * rate(series[k]["ccy"], day, lastfx)
+        port.append(tot)
+    if len(port) < 5 or not port[0]:
+        return {"ok": False, "error": "yetersiz veri"}
+
+    def norm(vals, base):
+        return [round((v - base) / base * 100, 2) for v in vals]
+
+    lines = [{"key": "portfolio", "name": "portfolio",
+              "points": norm(port, port[0]),
+              "ret": round((port[-1] - port[0]) / port[0] * 100, 2)}]
+    for b in bench:
+        s = series.get(b, {}).get("data") or {}
+        vals, last = [], None
+        for day in days:
+            if day in s:
+                last = s[day]
+            vals.append(last)
+        if vals and vals[0]:
+            vv = [v if v is not None else vals[0] for v in vals]
+            lines.append({"key": b, "name": b, "points": norm(vv, vv[0]),
+                          "ret": round((vv[-1] - vv[0]) / vv[0] * 100, 2)})
+    # grafik icin seyrelt
+    n = len(days)
+    if n > 160:
+        step = n / 160.0
+        idx = sorted(set(int(i * step) for i in range(160)) | {n - 1})
+        days = [days[i] for i in idx]
+        for L in lines:
+            L["points"] = [L["points"][i] for i in idx]
+    return {"ok": True, "range": rng, "days": days, "lines": lines,
+            "startValue": round(port[0]), "endValue": round(port[-1]),
+            "count": len(hold_keys)}
+
 EX_COUNTRY = {
     "Stockholm": "🇸🇪", "Oslo": "🇳🇴", "Helsinki": "🇫🇮", "Copenhagen": "🇩🇰",
     "NYSE": "🇺🇸", "NasdaqGS": "🇺🇸", "NASDAQ": "🇺🇸", "NYSEArca": "🇺🇸", "NYSE American": "🇺🇸",
@@ -1255,18 +1424,61 @@ EX_COUNTRY = {
     "Amsterdam": "🇳🇱", "Paris": "🇫🇷", "Singapore": "🇸🇬",
 }
 
+TYPE_LABEL = {"EQUITY": "stock", "ETF": "etf", "MUTUALFUND": "fund", "INDEX": "index"}
+
 def fetch_search(q):
-    url = "https://query1.finance.yahoo.com/v1/finance/search?q=%s&quotesCount=8&newsCount=0" % urllib.parse.quote(q)
-    d = json.load(_open(url))
-    out = []
-    for x in d.get("quotes", []):
-        if x.get("quoteType") != "EQUITY":
+    """Hisse + ETF + fon + endeks arar (once genel, sonra fonlara ozel ikinci tur)."""
+    def hit(url):
+        try:
+            return json.load(_open(url)).get("quotes", []) or []
+        except Exception:
+            return []
+    base = "https://query1.finance.yahoo.com/v1/finance/search?q=%s&quotesCount=%d&newsCount=0"
+    quotes = hit(base % (urllib.parse.quote(q), 14))
+    # Yahoo genel aramada fonlari geri plana atiyor -> fon/ETF icin ikinci tur
+    if not any((x.get("quoteType") in ("MUTUALFUND", "ETF")) for x in quotes):
+        quotes += hit((base % (urllib.parse.quote(q), 10)) + "&quotesQueryId=tss_match_phrase_query")
+    out, seen = [], set()
+    for x in quotes:
+        qt = x.get("quoteType")
+        if qt not in TYPE_LABEL:
             continue
+        sym = x.get("symbol")
+        if not sym or sym in seen:
+            continue
+        seen.add(sym)
         exch = x.get("exchDisp") or ""
-        out.append({"symbol": x.get("symbol"),
+        out.append({"symbol": sym,
                     "name": x.get("shortname") or x.get("longname") or "",
                     "exchange": exch,
+                    "type": TYPE_LABEL[qt],
                     "country": EX_COUNTRY.get(exch, "🏳️")})
+    order = {"stock": 0, "etf": 1, "fund": 2, "index": 3}
+    out.sort(key=lambda r: order.get(r["type"], 9))
+    out = out[:12]
+    # Nordic fonlarda Yahoo isim vermiyor (sadece 0P... kodu) -> chart meta'dan cek
+    missing = [r for r in out if not r["name"] or r["name"] == r["symbol"]]
+    if missing:
+        lock = threading.Lock()
+        def name_of(r):
+            try:
+                u = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d"
+                     % urllib.parse.quote(r["symbol"]))
+                m = json.load(_open(u))["chart"]["result"][0]["meta"]
+                nm = m.get("longName") or m.get("shortName")
+                cur = m.get("currency")
+                with lock:
+                    if nm:
+                        r["name"] = nm
+                    if cur:
+                        r["currency"] = cur
+            except Exception:
+                pass
+        ths = [threading.Thread(target=name_of, args=(r,)) for r in missing[:8]]
+        for t_ in ths:
+            t_.start()
+        for t_ in ths:
+            t_.join(timeout=8)
     return {"ok": True, "items": out}
 
 def _json(handler, obj):
@@ -1323,7 +1535,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if p.path == "/api/newsfeed":
                 try:
                     ss = [x.strip() for x in (qs.get("s") or [""])[0].split(",") if x.strip()]
-                    return _json(self, fetch_newsfeed(ss))
+                    lg = (qs.get("lang") or ["en"])[0]
+                    return _json(self, fetch_newsfeed(ss, lang=lg))
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/perf":
+                try:
+                    raw = (qs.get("h") or [""])[0]
+                    hold = []
+                    for part in raw.split(","):
+                        if "~" not in part:
+                            continue
+                        sy, q = part.split("~", 1)
+                        try:
+                            qn = float(q)
+                        except Exception:
+                            continue
+                        if sy.strip() and qn > 0:
+                            hold.append((sy.strip(), qn))
+                    if not hold:
+                        return _json(self, {"ok": False, "error": "varlik yok"})
+                    bch = [x for x in (qs.get("b") or ["^GSPC,^IXIC,^OMX"])[0].split(",") if x]
+                    return _json(self, fetch_perf(hold[:60], (qs.get("range") or ["1y"])[0], bch))
                 except Exception as e:
                     return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/sectors":
@@ -1362,7 +1595,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if p.path == "/api/f":
                     return _json(self, fetch_fund(sym))
                 if p.path == "/api/news":
-                    return _json(self, fetch_news(sym, (qs.get("name") or [""])[0] or None))
+                    return _json(self, fetch_news(sym, (qs.get("name") or [""])[0] or None,
+                                                  lang=(qs.get("lang") or ["en"])[0]))
                 if p.path == "/api/tech":
                     return _json(self, fetch_tech(sym))
                 if p.path == "/api/canslim":
