@@ -1034,18 +1034,83 @@ def _clean(s):
     s = re.sub(r"<.*?>", "", s)
     return s.strip()
 
-def fetch_news(sym):
-    url = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US" % urllib.parse.quote(sym)
-    xml = _open(url).read().decode("utf-8", "ignore")
-    items = []
-    for block in re.findall(r"<item>(.*?)</item>", xml, re.S)[:6]:
+def _pubts(s):
+    try:
+        import email.utils
+        return int(email.utils.parsedate_to_datetime(s).timestamp())
+    except Exception:
+        return 0
+
+def _rss_items(url, limit=8):
+    try:
+        xml = _open(url).read().decode("utf-8", "ignore")
+    except Exception:
+        return []
+    out = []
+    for block in re.findall(r"<item>(.*?)</item>", xml, re.S)[:limit]:
         def ex(tag):
             mm = re.search(r"<%s>(.*?)</%s>" % (tag, tag), block, re.S)
             return _clean(mm.group(1)) if mm else ""
-        items.append({"title": ex("title"), "link": ex("link"), "date": ex("pubDate")})
-    return {"ok": True, "items": items}
+        ttl = ex("title")
+        if not ttl:
+            continue
+        src = ""
+        m2 = re.search(r"<source[^>]*>(.*?)</source>", block, re.S)
+        if m2:
+            src = _clean(m2.group(1))
+        # Google News basliklari "Baslik - Kaynak" seklinde gelir; kaynagi baslikten ayikla
+        if " - " in ttl:
+            parts = ttl.rsplit(" - ", 1)
+            if len(parts[1]) < 40:
+                ttl = parts[0]
+                if not src:
+                    src = parts[1]
+        pd = ex("pubDate")
+        out.append({"title": ttl, "link": ex("link"), "date": pd,
+                    "ts": _pubts(pd), "source": src})
+    return out
 
-# ================= HABER AKISI + BASIT DUYGU ANALIZI =================
+def _yahoo_search_news(name, limit=6):
+    try:
+        u = ("https://query1.finance.yahoo.com/v1/finance/search?q=%s&quotesCount=0&newsCount=%d"
+             % (urllib.parse.quote(name), limit))
+        dd = json.load(_open(u))
+    except Exception:
+        return []
+    out = []
+    for n in dd.get("news", []):
+        ts = n.get("providerPublishTime") or 0
+        out.append({"title": n.get("title") or "", "link": n.get("link") or "",
+                    "date": "", "ts": int(ts), "source": n.get("publisher") or ""})
+    return [x for x in out if x["title"]]
+
+def fetch_news(sym, name=None, per=6):
+    """Uc kaynak: Yahoo RSS (sembol) + Yahoo arama + Google News (isim).
+    Nordic hisselerde Yahoo RSS haftalarca eski kalir; Google News gunluk getirir."""
+    items = []
+    items += _rss_items(
+        "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
+        % urllib.parse.quote(sym))
+    if name:
+        # Isim bazli aramalar (Yahoo search + Google News) alakasiz sonuc dondurebiliyor
+        # -> basligin icinde sirket adi gecmeyenleri ele
+        words = [w for w in re.split(r"[^A-Za-zÅÄÖåäö0-9]+", name) if len(w) >= 4]
+        key = max(words, key=len).lower() if words else name.lower()
+        cand = _yahoo_search_news(name)
+        cand += _rss_items(
+            "https://news.google.com/rss/search?q=%s&hl=en-US&gl=US&ceid=US:en"
+            % urllib.parse.quote('"' + name + '" stock'), limit=10)
+        items += [it for it in cand if key in it["title"].lower()]
+    seen, uniq = set(), []
+    for it in items:
+        k = re.sub(r"[^a-z0-9]", "", it["title"].lower())[:60]
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        uniq.append(it)
+    uniq.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+    return {"ok": True, "items": uniq[:per], "now": int(time.time())}
+
 POS_WORDS = [
     "beat","beats","surge","surges","soar","soars","jump","jumps","rally","rallies","record",
     "upgrade","upgrades","raises","raised","boost","boosts","strong","growth","profit","wins",
@@ -1082,13 +1147,23 @@ def score_headline(title):
     return {"tone": tone, "score": pos - neg, "topics": topics}
 
 def fetch_newsfeed(syms, per=4):
-    syms = [s for s in syms if s][:14]
+    pairs = []
+    for s in syms[:14]:
+        if not s:
+            continue
+        if "~" in s:
+            a1, b1 = s.split("~", 1)
+            pairs.append((a1.strip(), b1.strip()))
+        else:
+            pairs.append((s.strip(), None))
+    syms = [p[0] for p in pairs]
+    names = dict(pairs)
     out = {}
     lock = threading.Lock()
 
     def one(s):
         try:
-            r = fetch_news(s)
+            r = fetch_news(s, names.get(s), per=per + 2)
             items = []
             for it in (r.get("items") or [])[:per]:
                 sc = score_headline(it.get("title") or "")
@@ -1115,9 +1190,63 @@ def fetch_newsfeed(syms, per=4):
     for x in flat:
         for tp in x["topics"]:
             topc[tp] = topc.get(tp, 0) + 1
-    return {"ok": True, "items": flat, "count": len(flat),
+    flat.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+    return {"ok": True, "items": flat, "count": len(flat), "now": int(time.time()),
             "pos": pos, "neg": neg, "neu": len(flat) - pos - neg,
             "topics": sorted(topc.items(), key=lambda kv: -kv[1])}
+
+# ================= SEKTOR ROTASYONU (11 SPDR sektoru, cok periyotlu) =================
+SECTOR_ETFS = [
+    ("XLK", "tech",    "cyc"), ("XLF", "fin",     "cyc"), ("XLY", "cons",  "cyc"),
+    ("XLI", "ind",     "cyc"), ("XLB", "mat",     "cyc"), ("XLE", "energy","cyc"),
+    ("XLC", "comm",    "cyc"), ("XLV", "health",  "def"), ("XLP", "staple","def"),
+    ("XLU", "util",    "def"), ("XLRE", "reit",   "def"),
+]
+
+def _sector_one(sym):
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=6mo"
+           % urllib.parse.quote(sym))
+    res = json.load(_open(url))["chart"]["result"][0]
+    cl = [c for c in (res.get("indicators", {}).get("quote", [{}])[0].get("close") or [])
+          if c is not None]
+    if len(cl) < 30:
+        raise ValueError("yetersiz")
+    p_now = cl[-1]
+    def ret(n):
+        return round((p_now - cl[-1 - n]) / cl[-1 - n] * 100, 2) if len(cl) > n else None
+    ma50 = sum(cl[-50:]) / 50 if len(cl) >= 50 else None
+    return {"symbol": sym, "price": round(p_now, 2),
+            "d1": ret(1), "w1": ret(5), "m1": ret(21), "m3": ret(63),
+            "aboveMa50": (p_now > ma50) if ma50 else None}
+
+def fetch_sectors():
+    out, lock = {}, threading.Lock()
+    def go(sym):
+        try:
+            r = _sector_one(sym)
+        except Exception:
+            r = None
+        with lock:
+            out[sym] = r
+    ths = [threading.Thread(target=go, args=(s[0],)) for s in SECTOR_ETFS]
+    for t_ in ths:
+        t_.start()
+    for t_ in ths:
+        t_.join(timeout=14)
+    rows = []
+    for sym, key, grp in SECTOR_ETFS:
+        r = out.get(sym)
+        if r:
+            r["key"] = key; r["group"] = grp
+            rows.append(r)
+    def avg(grp, field):
+        vals = [r[field] for r in rows if r["group"] == grp and r.get(field) is not None]
+        return round(sum(vals) / len(vals), 2) if vals else None
+    return {"ok": True, "rows": rows,
+            "cyc": {f: avg("cyc", f) for f in ("d1", "w1", "m1", "m3")},
+            "def": {f: avg("def", f) for f in ("d1", "w1", "m1", "m3")},
+            "breadth": {f: sum(1 for r in rows if (r.get(f) or 0) > 0) for f in ("d1", "w1", "m1")},
+            "count": len(rows)}
 
 EX_COUNTRY = {
     "Stockholm": "🇸🇪", "Oslo": "🇳🇴", "Helsinki": "🇫🇮", "Copenhagen": "🇩🇰",
@@ -1197,6 +1326,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_newsfeed(ss))
                 except Exception as e:
                     return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/sectors":
+                try:
+                    return _json(self, fetch_sectors())
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/search":
                 q = (qs.get("q") or [""])[0].strip()
                 try:
@@ -1228,7 +1362,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if p.path == "/api/f":
                     return _json(self, fetch_fund(sym))
                 if p.path == "/api/news":
-                    return _json(self, fetch_news(sym))
+                    return _json(self, fetch_news(sym, (qs.get("name") or [""])[0] or None))
                 if p.path == "/api/tech":
                     return _json(self, fetch_tech(sym))
                 if p.path == "/api/canslim":
