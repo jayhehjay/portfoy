@@ -1113,9 +1113,17 @@ def fetch_news(sym, name=None, per=6, lang="en"):
             for it in uq:
                 it["lang"] = lang
             return {"ok": True, "items": uq[:per], "now": int(time.time()), "lang": lang}
-    items += _rss_items(
+    sym_items = _rss_items(
         "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
         % urllib.parse.quote(sym))
+    if name:
+        # Sembol akisi da alakasiz baslik getirebiliyor -> sirket adi gecmeyeni ele
+        w1 = [w for w in re.split(r"[^A-Za-zÅÄÖåäö0-9]+", name) if len(w) >= 4]
+        k1 = max(w1, key=len).lower() if w1 else name.lower()
+        base_sym = re.split(r"[.\-]", sym)[0].lower()
+        sym_items = [it for it in sym_items
+                     if k1 in it["title"].lower() or base_sym in it["title"].lower()]
+    items += sym_items
     if name:
         # Isim bazli aramalar (Yahoo search + Google News) alakasiz sonuc dondurebiliyor
         # -> basligin icinde sirket adi gecmeyenleri ele

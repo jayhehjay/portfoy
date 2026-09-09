@@ -1048,6 +1048,7 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
 .nw-m{font-size:.62rem;color:var(--faint)}
 .nw-item.stale .nw-t{opacity:.6}
 .nw-item.stale .nw-m{color:var(--down);opacity:.85}
+.nw-fb{font-size:.58rem;color:var(--faint);font-weight:500;letter-spacing:0;text-transform:none}
 .tr-head{display:flex;align-items:baseline;gap:8px}
 .tr-head .rn{font-weight:600;font-size:.83rem}
 .tr-sc{margin-left:auto;font-weight:700;font-size:.8rem;color:var(--accent)}
@@ -3196,12 +3197,14 @@ on" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='
     it.forEach(function(x){ if(!byS[x.symbol]){ byS[x.symbol]=[]; order.push(x.symbol); } byS[x.symbol].push(x); });
     var nm=N.names||{};
     var body=order.map(function(s){
-      return '<div class="rep-card"><div class="rep-h">'+esc(nm[s]||s)+'</div>'+
+      var fb = byS[s].length && byS[s].every(function(x){ return x.fallback; });
+      return '<div class="rep-card"><div class="rep-h">'+esc(nm[s]||s)+
+        (fb?' <span class="nw-fb">'+t('nwFallback')+'</span>':'')+'</div>'+
         byS[s].map(function(x){
           var ic = x.tone==='pos'?'▲':(x.tone==='neg'?'▼':'•');
           var ag = newsAge(x.ts, N.now||0);
           var meta = [ag, x.source||''].filter(Boolean).join(' · ');
-          if(x.fallback) meta += (meta?' · ':'')+t('nwFallback');
+
           var old = (x.ts && N.now && (N.now-x.ts) > 14*86400) ? ' stale' : '';
           return '<a class="nw-item '+x.tone+old+'" href="'+esc(x.link||'#')+'" target="_blank" rel="noopener">'+
             '<span class="nw-ic">'+ic+'</span><span class="nw-body"><span class="nw-t">'+esc(x.title)+'</span>'+
