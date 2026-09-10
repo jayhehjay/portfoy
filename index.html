@@ -1347,6 +1347,10 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
   .modal-body{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
   .modal-foot{ flex:0 0 auto; padding-bottom:calc(14px + env(safe-area-inset-bottom)); }
 }
+/* Hisse paneli (kaydettikten sonra acilan): sadece govde kayar, iPhone'da yukseklik takilmasin */
+.drawer-head{ flex:0 0 auto; }
+.drawer-body{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; touch-action:pan-y; }
+@media (max-width:600px){ .drawer-body{ max-height:none; padding-bottom:calc(30px + env(safe-area-inset-bottom)); } }
 </style>
 </head>
 <body>
