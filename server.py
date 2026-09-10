@@ -1409,8 +1409,10 @@ def fetch_perf(holdings, rng="1y", bench=None):
             if day in s:
                 last = s[day]
             vals.append(last)
-        if vals and vals[0]:
-            vv = [v if v is not None else vals[0] for v in vals]
+        # Ulkelerin tatil gunleri farkli: ilk gun bossa ilk bilinen degerle doldur
+        first_known = next((v for v in vals if v is not None), None)
+        if first_known:
+            vv = [v if v is not None else first_known for v in vals]
             lines.append({"key": b, "name": b, "points": norm(vv, vv[0]),
                           "ret": round((vv[-1] - vv[0]) / vv[0] * 100, 2)})
     # grafik icin seyrelt
@@ -1424,6 +1426,186 @@ def fetch_perf(holdings, rng="1y", bench=None):
     return {"ok": True, "range": rng, "days": days, "lines": lines,
             "startValue": round(port[0]), "endValue": round(port[-1]),
             "count": len(hold_keys)}
+
+
+# ================= BILANCO TAKVIMI (/api/earnings) =================
+EARN_WORDS = ["earnings", "quarter", "q1", "q2", "q3", "q4", "results", "revenue",
+              "eps", "guidance", "profit", "delårsrapport", "kvartal", "rapport",
+              "bilanço", "çeyrek", "kâr", "gelir", "interim", "report"]
+
+def _earn_one(sym, name, lang, with_news):
+    crumb = get_crumb()
+    if not crumb:
+        return {"symbol": sym, "ok": False}
+    mods = "calendarEvents,earningsHistory,earnings,price"
+    def pull(c):
+        u = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+             % (urllib.parse.quote(sym), mods, urllib.parse.quote(c)))
+        return json.load(_open(u))["quoteSummary"]["result"][0]
+    try:
+        r = pull(crumb)
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            c2 = get_crumb(force=True)
+            if not c2:
+                return {"symbol": sym, "ok": False}
+            r = pull(c2)
+        else:
+            return {"symbol": sym, "ok": False}
+    except Exception:
+        return {"symbol": sym, "ok": False}
+    ce = (r.get("calendarEvents") or {}).get("earnings") or {}
+    dates = [_raw(x) for x in (ce.get("earningsDate") or []) if _raw(x)]
+    nxt = time.strftime("%Y-%m-%d", time.gmtime(min(dates))) if dates else None
+    past = []
+    for h in ((r.get("earningsHistory") or {}).get("history") or []):
+        est, act = _raw(h.get("epsEstimate")), _raw(h.get("epsActual"))
+        q = _raw(h.get("quarter"))
+        past.append({"date": time.strftime("%Y-%m-%d", time.gmtime(q)) if q else None,
+                     "estimate": est, "actual": act,
+                     "surprisePct": _raw(h.get("surprisePercent"))})
+    past.sort(key=lambda x: x["date"] or "", reverse=True)
+    # ceyreklik ciro (gerceklesen) - earningsChart/financialsChart
+    rev = []
+    fc = ((r.get("earnings") or {}).get("financialsChart") or {}).get("quarterly") or []
+    for x in fc[-4:]:
+        rev.append({"q": x.get("date"), "revenue": _raw(x.get("revenue")),
+                    "earnings": _raw(x.get("earnings"))})
+    pr = r.get("price") or {}
+    out = {"symbol": sym, "ok": True, "name": name or pr.get("shortName") or sym,
+           "next": nxt,
+           "epsEst": _raw(ce.get("earningsAverage")),
+           "epsLow": _raw(ce.get("earningsLow")), "epsHigh": _raw(ce.get("earningsHigh")),
+           "revEst": _raw(ce.get("revenueAverage")),
+           "currency": pr.get("currency"),
+           "past": past[:4], "revenue": rev}
+    if with_news and name:
+        try:
+            nw = fetch_news(sym, name, per=10, lang=lang)
+            items = [it for it in (nw.get("items") or [])
+                     if any(w in it["title"].lower() for w in EARN_WORDS)]
+            out["news"] = items[:3]
+        except Exception:
+            out["news"] = []
+    return out
+
+def fetch_earnings(pairs, lang="en"):
+    """pairs: [(sembol, isim)] -> bilanco takvimi, gecmis 4 ceyrek, bilanco haberleri."""
+    res, lock = [], threading.Lock()
+    def go(sym, nm, idx):
+        r = _earn_one(sym, nm, lang, with_news=(idx < 14))
+        with lock:
+            res.append(r)
+    ths = [threading.Thread(target=go, args=(s, n, i)) for i, (s, n) in enumerate(pairs[:24])]
+    for t_ in ths:
+        t_.start()
+    for t_ in ths:
+        t_.join(timeout=25)
+    return {"ok": True, "items": [x for x in res if x.get("ok")],
+            "today": time.strftime("%Y-%m-%d", time.gmtime())}
+
+
+# ================= BILANCO DETAY ANALIZI (/api/earndetail) =================
+def fetch_earn_detail(sym):
+    """Son raporu rakamlarla yorumla: bulgular kod + deger olarak doner (arayuz 3 dile cevirir)."""
+    f = fetch_fundamentals(sym)
+    if not f.get("ok"):
+        return {"ok": False}
+    q = (f.get("income") or {}).get("quarterly") or []          # yeni -> eski
+    eh = f.get("earningsHistory") or []
+    gr = f.get("growth") or {}
+    r = f.get("ratios") or {}
+    cur = f.get("currency")
+
+    def marg(x, k):
+        rev, v = x.get("totalRevenue"), x.get(k)
+        return round(v / rev * 100, 1) if (rev and v is not None) else None
+    quarters = [{"date": x.get("date"), "revenue": x.get("totalRevenue"),
+                 "netIncome": x.get("netIncome"), "eps": x.get("eps"),
+                 "gm": marg(x, "grossProfit"), "om": marg(x, "operatingIncome"),
+                 "nm": marg(x, "netIncome")} for x in q[:5]]
+    F = []
+    def add(k, dd, **v):
+        F.append({"k": k, "d": dd, "v": v})
+
+    last = eh[0] if eh else None
+    if last and last.get("actual") is not None and last.get("estimate"):
+        diff = (last["actual"] - last["estimate"]) / abs(last["estimate"]) * 100
+        vv = dict(v=round(abs(diff), 1), a=round(last["actual"], 2), e=round(last["estimate"], 2))
+        if diff >= 2:
+            add("fEpsBeat", "pos", **vv)
+        elif diff <= -2:
+            add("fEpsMiss", "neg", **vv)
+        else:
+            add("fEpsInline", "neu", **vv)
+    known = [h for h in eh if h.get("actual") is not None and h.get("estimate") is not None]
+    if len(known) >= 3:
+        b = sum(1 for h in known if h["actual"] >= h["estimate"])
+        if b == len(known):
+            add("fStreakAll", "pos", n=len(known))
+        elif b == 0:
+            add("fStreakNone", "neg", n=len(known))
+        else:
+            add("fStreakSome", "pos" if b / len(known) >= 0.75 else "neu", n=len(known), b=b)
+
+    rg = r.get("revenueGrowth")
+    if rg is not None:
+        pv = round(abs(rg) * 100, 1)
+        add("fRevStrong" if rg >= 0.10 else ("fRevUp" if rg >= 0 else "fRevDown"),
+            "pos" if rg >= 0.05 else ("neu" if rg >= 0 else "neg"), v=pv)
+    eg = r.get("earningsGrowth")
+    if eg is not None:
+        pv = round(abs(eg) * 100, 1)
+        add("fEarnStrong" if eg >= 0.15 else ("fEarnUp" if eg >= 0 else "fEarnDown"),
+            "pos" if eg >= 0.05 else ("neu" if eg >= 0 else "neg"), v=pv)
+
+    nms = [x["nm"] for x in quarters if x["nm"] is not None]
+    if len(nms) >= 3:
+        prev = sum(nms[1:]) / len(nms[1:])
+        dlt = nms[0] - prev
+        if dlt > 1:
+            add("fMarginUp", "pos", m=nms[0], p=round(prev, 1))
+        elif dlt < -1:
+            add("fMarginDown", "neg", m=nms[0], p=round(prev, 1))
+
+    g1y = (gr.get("+1y") or {}).get("growth")
+    if g1y is not None:
+        pv = round(abs(g1y) * 100, 1)
+        if g1y >= 0.10:
+            add("fOutlookUp", "pos", v=pv)
+        elif g1y < 0:
+            add("fOutlookDown", "neg", v=pv)
+        else:
+            add("fOutlookFlat", "neu", v=pv)
+
+    tpe, fpe = r.get("trailingPE"), r.get("forwardPE")
+    if tpe and fpe and 0 < fpe < 200 and 0 < tpe < 200:
+        if fpe < tpe * 0.9:
+            add("fPeFalling", "pos", f=round(fpe, 1), t=round(tpe, 1))
+        elif fpe > tpe * 1.1:
+            add("fPeRising", "neg", f=round(fpe, 1), t=round(tpe, 1))
+
+    de = r.get("debtToEquity")
+    if de is not None and de > 150:
+        add("fDebtHigh", "neg", v=round(de))
+    fcf = r.get("freeCashflow")
+    if fcf is not None:
+        add("fFcfPos" if fcf > 0 else "fFcfNeg", "pos" if fcf > 0 else "neg", v=fcf)
+
+    pos = sum(1 for x in F if x["d"] == "pos")
+    neg = sum(1 for x in F if x["d"] == "neg")
+    # Az bulgu varsa "karisik" demek yaniltici -> "sinirli veri"
+    if pos + neg < 2 or len(F) < 3:
+        verdict = "thin"
+    else:
+        verdict = "strong" if pos - neg >= 3 else ("weak" if neg - pos >= 2 else "mixed")
+    growth = {k: (gr.get(k) or {}).get("growth") for k in ("0q", "+1q", "0y", "+1y")}
+    return {"ok": True, "symbol": sym, "currency": cur,
+            "lastDate": last.get("quarter") if last else None,
+            "last": last, "quarters": quarters, "history": eh[:4], "growth": growth,
+            "margins": {"gm": r.get("grossMargin"), "om": r.get("operatingMargin"),
+                        "nm": r.get("profitMargin")},
+            "findings": F, "pos": pos, "neg": neg, "verdict": verdict}
 
 EX_COUNTRY = {
     "Stockholm": "🇸🇪", "Oslo": "🇳🇴", "Helsinki": "🇫🇮", "Copenhagen": "🇩🇰",
@@ -1547,6 +1729,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_newsfeed(ss, lang=lg))
                 except Exception as e:
                     return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/earnings":
+                try:
+                    prs = []
+                    for part in (qs.get("s") or [""])[0].split(","):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        if "~" in part:
+                            s1, n1 = part.split("~", 1)
+                            prs.append((s1.strip(), n1.strip()))
+                        else:
+                            prs.append((part, None))
+                    return _json(self, fetch_earnings(prs, (qs.get("lang") or ["en"])[0]))
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/perf":
                 try:
                     raw = (qs.get("h") or [""])[0]
@@ -1613,6 +1810,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     return _json(self, fetch_deep(sym))
                 if p.path == "/api/fundamentals":
                     return _json(self, fetch_fundamentals(sym))
+                if p.path == "/api/earndetail":
+                    return _json(self, fetch_earn_detail(sym))
                 if p.path == "/api/ta":
                     return _json(self, fetch_ta(sym, (qs.get("range") or ["6mo"])[0],
                                                 (qs.get("iv") or ["1d"])[0],
