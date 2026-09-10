@@ -19,21 +19,32 @@ _lock = threading.Lock()
 def _open(url):
     return _opener.open(urllib.request.Request(url, headers=UA), timeout=12)
 
+_crumb_fail_at = 0
+
 def get_crumb(force=False):
-    global _crumb
+    """Yahoo erisim anahtari. Basarisizliktan sonra 2 dk tekrar denemez:
+    her istekte yeniden sormak Yahoo'nun 429 (cok fazla istek) engelini uzatir."""
+    global _crumb, _crumb_fail_at
     with _lock:
         if _crumb and not force:
             return _crumb
-        try:
+        if not force and _crumb_fail_at and time.time() - _crumb_fail_at < 120:
+            return None
+        for warm, url in (("https://fc.yahoo.com", "https://query2.finance.yahoo.com/v1/test/getcrumb"),
+                          ("https://finance.yahoo.com/quote/AAPL/", "https://query1.finance.yahoo.com/v1/test/getcrumb")):
             try:
-                _open("https://fc.yahoo.com")
+                try:
+                    _open(warm).read(1)
+                except Exception:
+                    pass
+                c = _open(url).read().decode("utf-8", "ignore").strip()
+                if c and "<" not in c and len(c) < 40:
+                    _crumb, _crumb_fail_at = c, 0
+                    return _crumb
             except Exception:
-                pass
-            c = _open("https://query1.finance.yahoo.com/v1/test/getcrumb").read().decode("utf-8", "ignore")
-            _crumb = c if (c and "<" not in c) else None
-        except Exception:
-            _crumb = None
-        return _crumb
+                continue
+        _crumb, _crumb_fail_at = None, time.time()
+        return None
 
 def _raw(x):
     return x.get("raw") if isinstance(x, dict) else x
@@ -246,28 +257,34 @@ def fetch_timeseries(sym, group, period="quarterly", limit=4):
     return rows[:limit]
 
 def fetch_fundamentals(sym):
-    """Temel analiz: gelir tablosu, bilanço, nakit akışı (yıllık+çeyreklik), kâr geçmişi, profil."""
+    """Temel analiz: gelir tablosu, bilanço, nakit akışı (yıllık+çeyreklik), kâr geçmişi, profil.
+    Yahoo anahtari alinamazsa mali tablolar yine gelir (anahtarsiz kaynak); sadece
+    kar gecmisi / analist beklentisi / oranlar eksik kalir."""
     crumb = get_crumb()
-    if not crumb:
-        return {"ok": False, "error": "crumb yok"}
     mods = ("assetProfile,incomeStatementHistory,incomeStatementHistoryQuarterly,"
             "balanceSheetHistory,balanceSheetHistoryQuarterly,"
             "cashflowStatementHistory,cashflowStatementHistoryQuarterly,"
             "earningsHistory,earningsTrend,financialData,defaultKeyStatistics,summaryDetail,price")
-    url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
-           % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
-    try:
-        r = json.load(_open(url))["quoteSummary"]["result"][0]
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            c2 = get_crumb(force=True)
-            if not c2:
-                return {"ok": False, "error": "crumb yenilenemedi"}
+    r, degraded = {}, True
+    if crumb:
+        try:
             url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
-                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
             r = json.load(_open(url))["quoteSummary"]["result"][0]
-        else:
-            raise
+            degraded = False
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                c2 = get_crumb(force=True)
+                if c2:
+                    try:
+                        url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+                               % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+                        r = json.load(_open(url))["quoteSummary"]["result"][0]
+                        degraded = False
+                    except Exception:
+                        r = {}
+        except Exception:
+            r = {}
 
     ap = r.get("assetProfile", {}) or {}
     fd = r.get("financialData", {}) or {}
@@ -309,7 +326,9 @@ def fetch_fundamentals(sym):
                          "epsEstimate": _raw((tr.get("earningsEstimate") or {}).get("avg")),
                          "revEstimate": _raw((tr.get("revenueEstimate") or {}).get("avg"))}
 
-    return {"ok": True, "symbol": sym,
+    if degraded and not (inc_q or inc_a):
+        return {"ok": False, "error": "crumb yok"}
+    return {"ok": True, "symbol": sym, "degraded": degraded,
             "profile": {"name": pr.get("longName") or pr.get("shortName"),
                         "sector": ap.get("sector"), "industry": ap.get("industry"),
                         "employees": ap.get("fullTimeEmployees"), "country": ap.get("country"),
@@ -1491,6 +1510,9 @@ def _earn_one(sym, name, lang, with_news):
 
 def fetch_earnings(pairs, lang="en"):
     """pairs: [(sembol, isim)] -> bilanco takvimi, gecmis 4 ceyrek, bilanco haberleri."""
+    if not get_crumb():
+        return {"ok": True, "items": [], "blocked": True,
+                "today": time.strftime("%Y-%m-%d", time.gmtime())}
     res, lock = [], threading.Lock()
     def go(sym, nm, idx):
         r = _earn_one(sym, nm, lang, with_news=(idx < 14))
@@ -1600,7 +1622,7 @@ def fetch_earn_detail(sym):
     else:
         verdict = "strong" if pos - neg >= 3 else ("weak" if neg - pos >= 2 else "mixed")
     growth = {k: (gr.get(k) or {}).get("growth") for k in ("0q", "+1q", "0y", "+1y")}
-    return {"ok": True, "symbol": sym, "currency": cur,
+    return {"ok": True, "symbol": sym, "currency": cur, "degraded": bool(f.get("degraded")),
             "lastDate": last.get("quarter") if last else None,
             "last": last, "quarters": quarters, "history": eh[:4], "growth": growth,
             "margins": {"gm": r.get("grossMargin"), "om": r.get("operatingMargin"),
