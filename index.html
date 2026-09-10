@@ -1336,6 +1336,17 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
 .ed-f .dot{ flex:0 0 7px; height:7px; border-radius:50%; margin-top:7px; background:var(--faint); }
 .ed-f.pos .dot{ background:#26a65b; } .ed-f.neg .dot{ background:#e8483f; } .ed-f.neu .dot{ background:#e2b45f; }
 .ed-v.thin{ color:var(--muted); }
+
+/* iPhone: sabit pencere + acik klavye iken kaydirma takiliyordu -> tam ekran, tek kayan alan */
+@media (max-width:700px){
+  .modal{ padding:0; align-items:stretch; overflow:hidden; }
+  .modal-card{ display:flex; flex-direction:column; width:100%; max-width:100%;
+    height:100vh; height:100dvh; max-height:100vh; max-height:100dvh; border-radius:0; transform:none; }
+  .modal.show .modal-card{ transform:none; }
+  .modal-head{ flex:0 0 auto; padding-top:max(14px, env(safe-area-inset-top)); }
+  .modal-body{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+  .modal-foot{ flex:0 0 auto; padding-bottom:calc(14px + env(safe-area-inset-bottom)); }
+}
 </style>
 </head>
 <body>
@@ -2332,7 +2343,7 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
           '<span><span class="tbadge '+ty+'">'+tl+'</span> <span class="ss-nm">'+esc((it.name||'').trim())+'</span> <span class="ss-ex">'+esc(it.exchange)+'</span></span>'+
           '<span class="ss-sym">'+esc(it.symbol)+'</span></button>'; }).join('');
     }).catch(function(){ box.innerHTML='<div class="ss-note">'+t('ssNone')+'</div>'; }); }
-  function pickResult(el){ var sym=el.getAttribute('data-sym'), nm=el.getAttribute('data-name'), co=el.getAttribute('data-country');
+  function pickResult(el){ try{ if(document.activeElement) document.activeElement.blur(); }catch(e){} var sym=el.getAttribute('data-sym'), nm=el.getAttribute('data-name'), co=el.getAttribute('data-country');
     var fy=document.getElementById('fld_ysym'); if(fy) fy.value=sym; var fn=document.getElementById('fld_name'); if(fn && !fn.value.trim()) fn.value=nm; var fc=document.getElementById('fld_country'); if(fc && !fc.value.trim()) fc.value=co;
     var ty=el.getAttribute('data-ty');
     var ft=document.querySelector('#formGrid [data-field="type"]');
@@ -2514,6 +2525,7 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
   document.getElementById('txQuery').addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); txSearchDo(); } });
   document.getElementById('txResults').addEventListener('click',function(e){
     var b=e.target.closest('[data-tp]'); if(!b) return;
+    try{ if(document.activeElement) document.activeElement.blur(); }catch(e2){}
     TX.sym=b.getAttribute('data-tp'); TX.name=b.getAttribute('data-tn');
     document.getElementById('txResults').innerHTML=''; document.getElementById('txQuery').value='';
     var cur=document.querySelector('#txForm [data-tf="ccy"]');
