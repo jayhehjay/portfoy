@@ -300,7 +300,7 @@ def fetch_fundamentals(sym):
     # Gelir tablosu quoteSummary'de dolu geliyor; bilanço/nakit akışı ise BOŞ dönüyor
     # (Yahoo kaldırdı) -> onları yeni timeseries API'sinden çekiyoruz.
     # quoteSummary gelir tablosunda eksikler var -> doğrudan timeseries kullan
-    inc_q = fetch_timeseries(sym, "income", "quarterly")
+    inc_q = fetch_timeseries(sym, "income", "quarterly", limit=5)
     inc_a = fetch_timeseries(sym, "income", "annual")
     if not inc_q:
         inc_q = _rows((r.get("incomeStatementHistoryQuarterly") or {}).get("incomeStatementHistory"), INC)
@@ -1570,6 +1570,19 @@ def fetch_earn_detail(sym):
         else:
             add("fStreakSome", "pos" if b / len(known) >= 0.75 else "neu", n=len(known), b=b)
 
+    def yoy(key):
+        if not q or not q[0].get("date") or q[0].get(key) in (None, 0):
+            return None
+        y, md = q[0]["date"][:4], q[0]["date"][4:]
+        target = str(int(y) - 1) + md
+        old = next((x for x in q if x.get("date") == target), None)
+        if not old or not old.get(key):
+            return None
+        return (q[0][key] - old[key]) / abs(old[key])
+    if r.get("revenueGrowth") is None:
+        r = dict(r); r["revenueGrowth"] = yoy("totalRevenue")
+    if r.get("earningsGrowth") is None:
+        r = dict(r); r["earningsGrowth"] = yoy("netIncome")
     rg = r.get("revenueGrowth")
     if rg is not None:
         pv = round(abs(rg) * 100, 1)
@@ -1619,6 +1632,10 @@ def fetch_earn_detail(sym):
     # Az bulgu varsa "karisik" demek yaniltici -> "sinirli veri"
     if pos + neg < 2 or len(F) < 3:
         verdict = "thin"
+    elif f.get("degraded"):
+        # Analist verisi yok (beklenti tutturma, F/K, nakit akisi): tam rapor hukmu vermek
+        # yaniltici olur (orn. beklentiyi kaciran sirket "guclu" gorunebilir) -> kismi hukum
+        verdict = "p_pos" if pos - neg >= 2 else ("p_neg" if neg - pos >= 2 else "p_mix")
     else:
         verdict = "strong" if pos - neg >= 3 else ("weak" if neg - pos >= 2 else "mixed")
     growth = {k: (gr.get(k) or {}).get("growth") for k in ("0q", "+1q", "0y", "+1y")}
