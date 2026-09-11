@@ -484,7 +484,23 @@ def fund_from_ts(sym):
     for r in (iq + ia):
         if r.get("shares"): shares = r["shares"]; break
     nets_a = [r.get("netIncome") for r in ia if r.get("netIncome") is not None]
-    return {"ok": True, "degraded": True, "trailingPE": pe,
+    cq = fetch_timeseries(sym, "cashflow", "quarterly")
+    fv = [r.get("freeCashFlow") for r in cq[:4]]
+    fcf = sum(fv) if (len(fv) == 4 and all(x is not None for x in fv)) else None
+    if fcf is None:
+        ca = fetch_timeseries(sym, "cashflow", "annual", limit=1)
+        fcf = ca[0].get("freeCashFlow") if ca else None
+    mcap, tccy = None, None
+    try:
+        qd = fetch_quote(sym)
+        tccy = qd.get("currency")
+        if shares and qd.get("price"): mcap = shares * qd["price"]
+    except Exception: pass
+    gp, op = ttm("grossProfit"), ttm("operatingIncome")
+    return {"ok": True, "degraded": True, "trailingPE": pe, "forwardPE": None,
+            "fcf": fcf, "ebitda": ebitda, "netDebt": nd, "marketCap": mcap, "tradeCcy": tccy,
+            "grossMargin": (gp / rev) if (gp is not None and rev) else None,
+            "operatingMargin": (op / rev) if (op is not None and rev) else None,
             "revenueGrowth": _yoy(iq, "totalRevenue"), "earningsGrowth": _yoy(iq, "netIncome"),
             "profitMargin": (net / rev) if (net is not None and rev) else None,
             "roe": (net / eq) if (net is not None and eq and eq > 0) else None,
@@ -1568,10 +1584,41 @@ def _earn_one(sym, name, lang, with_news):
             out["news"] = []
     return out
 
+def _est_next_report(sym):
+    """Yahoo anahtari yokken: son raporlanan ceyrek sonu + 3 ay + tipik gecikme = TAHMINI rapor gunu."""
+    rows = fetch_timeseries(sym, "income", "quarterly", limit=1)
+    if not rows: return None
+    try:
+        y, m, _ = [int(x) for x in rows[0]["date"].split("-")]
+    except Exception:
+        return None
+    lag = 25 if sym.upper().endswith((".ST", ".OL", ".CO", ".HE")) else 30
+    today = time.strftime("%Y-%m-%d")
+    for _ in range(4):
+        m += 3
+        if m > 12: m -= 12; y += 1
+        nm_y, nm_m = (y + 1, 1) if m == 12 else (y, m + 1)
+        qend = time.mktime((nm_y, nm_m, 1, 12, 0, 0, 0, 0, -1)) - 86400
+        ts = qend + lag * 86400
+        wd = time.localtime(ts).tm_wday          # 5=cumartesi, 6=pazar -> cumaya cek
+        if wd >= 5: ts -= (wd - 4) * 86400
+        rd = time.strftime("%Y-%m-%d", time.localtime(ts))
+        if rd >= today: return rd
+    return None
+
 def fetch_earnings(pairs, lang="en"):
     """pairs: [(sembol, isim)] -> bilanco takvimi, gecmis 4 ceyrek, bilanco haberleri."""
     if not get_crumb():
-        return {"ok": True, "items": [], "blocked": True,
+        est, lk = [], threading.Lock()
+        def ge(sym, nm):
+            n = _est_next_report(sym)
+            with lk:
+                est.append({"symbol": sym, "name": nm, "ok": True, "next": n, "est": bool(n),
+                            "past": [], "news": []})
+        ths = [threading.Thread(target=ge, args=(s, n)) for s, n in pairs[:24]]
+        for t_ in ths: t_.start()
+        for t_ in ths: t_.join(timeout=20)
+        return {"ok": True, "items": est, "blocked": True,
                 "today": time.strftime("%Y-%m-%d", time.gmtime())}
     res, lock = [], threading.Lock()
     def go(sym, nm, idx):
@@ -1897,7 +1944,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         return _json(self, s)
                     return _json(self, fetch_quote(sym))
                 if p.path == "/api/f":
-                    return _json(self, fetch_fund(sym))
+                    fr = fetch_fund(sym)
+                    if not fr.get("ok"):
+                        try: fr = fund_from_ts(sym)
+                        except Exception as e: fr = {"ok": False, "error": str(e)}
+                    return _json(self, fr)
                 if p.path == "/api/news":
                     return _json(self, fetch_news(sym, (qs.get("name") or [""])[0] or None,
                                                   lang=(qs.get("lang") or ["en"])[0]))
