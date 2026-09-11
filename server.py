@@ -216,7 +216,8 @@ TS_FIELDS = {
                ("OperatingIncome", "operatingIncome"),
                ("EBITDA", "ebitda"),
                ("NetIncome", "netIncome"),
-               ("DilutedEPS", "eps")],
+               ("DilutedEPS", "eps"),
+               ("DilutedAverageShares", "shares")],
 }
 
 def fetch_timeseries(sym, group, period="quarterly", limit=4):
@@ -446,11 +447,57 @@ def fetch_dividends(sym):
             "lastAmount": items[-1]["amount"],
             "lastDate": time.strftime("%Y-%m-%d", time.gmtime(items[-1]["date"]))}
 
+def _yoy(rows, key):
+    """Son ceyrek vs 1 yil onceki ayni ceyrek (tarih eslesmeli)."""
+    if len(rows) < 2: return None
+    r0 = rows[0]
+    try: t0 = time.mktime(time.strptime(r0["date"], "%Y-%m-%d"))
+    except Exception: return None
+    for r in rows[1:]:
+        try: dt = (t0 - time.mktime(time.strptime(r["date"], "%Y-%m-%d"))) / 86400
+        except Exception: continue
+        if 330 <= dt <= 400:
+            a, b = r0.get(key), r.get(key)
+            if a is not None and b is not None and b > 0:
+                return a / b - 1
+    return None
+
+def fund_from_ts(sym):
+    """Yahoo anahtari (crumb) yokken: oranlari anahtarsiz mali tablolardan hesapla."""
+    iq = fetch_timeseries(sym, "income", "quarterly", limit=5)
+    ia = fetch_timeseries(sym, "income", "annual")
+    bq = fetch_timeseries(sym, "balance", "quarterly")
+    if not (iq or ia):
+        return {"ok": False, "error": "veri yok"}
+    def ttm(key):
+        v = [r.get(key) for r in iq[:4]]
+        if len(v) == 4 and all(x is not None for x in v): return sum(v)
+        return (ia[0].get(key) if ia else None)
+    rev, net, ebitda = ttm("totalRevenue"), ttm("netIncome"), ttm("ebitda")
+    b0 = bq[0] if bq else {}
+    eq, debt, cash = b0.get("totalStockholderEquity"), b0.get("longTermDebt"), b0.get("cash")
+    nd = (debt - cash) if (debt is not None and cash is not None) else None
+    pe = None
+    try: pe = ((fetch_valuation(sym) or {}).get("pe") or {}).get("current")
+    except Exception: pass
+    shares = None
+    for r in (iq + ia):
+        if r.get("shares"): shares = r["shares"]; break
+    nets_a = [r.get("netIncome") for r in ia if r.get("netIncome") is not None]
+    return {"ok": True, "degraded": True, "trailingPE": pe,
+            "revenueGrowth": _yoy(iq, "totalRevenue"), "earningsGrowth": _yoy(iq, "netIncome"),
+            "profitMargin": (net / rev) if (net is not None and rev) else None,
+            "roe": (net / eq) if (net is not None and eq and eq > 0) else None,
+            "debtEbitda": (nd / ebitda) if (nd is not None and ebitda and ebitda > 0) else None,
+            "shares": shares, "netsAnnual": nets_a}
+
 def build_scorecard(sym):
     """4 boyutlu karne: Değer · Büyüme · Kalite · Momentum (şeffaf kurallar)."""
     f = fetch_fund(sym)
     val = fetch_valuation(sym)
     tech = fetch_tech(sym)
+    if not f.get("ok"):
+        f = fund_from_ts(sym)
     if not f.get("ok"):
         return {"ok": False, "error": "veri yok"}
     dims = []
@@ -509,7 +556,7 @@ def build_scorecard(sym):
 
     total = sum(x["score"] for x in dims)
     return {"ok": True, "symbol": sym, "dims": dims, "total": total, "max": 12,
-            "pct": total / 12.0 * 100}
+            "pct": total / 12.0 * 100, "degraded": bool(f.get("degraded"))}
 
 def fetch_deep(sym):
     out = {"ok": True, "symbol": sym}
@@ -578,23 +625,36 @@ def _year_change(sym):
 
 def fetch_canslim(sym):
     """CAN SLIM karnesi — O'Neil metodolojisinin 7 kriteri, şeffaf puanlama."""
-    crumb = get_crumb()
-    if not crumb:
-        return {"ok": False, "error": "crumb yok"}
     mods = ("financialData,defaultKeyStatistics,incomeStatementHistory,earningsHistory,"
             "majorHoldersBreakdown,institutionOwnership,price")
-    url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
-           % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
-    try:
-        r = json.load(_open(url))["quoteSummary"]["result"][0]
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            c2 = get_crumb(force=True)
+    r, degraded = None, False
+    crumb = get_crumb()
+    if crumb:
+        try:
             url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
-                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+                   % (urllib.parse.quote(sym), mods, urllib.parse.quote(crumb)))
             r = json.load(_open(url))["quoteSummary"]["result"][0]
-        else:
-            raise
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                c2 = get_crumb(force=True)
+                if c2:
+                    try:
+                        url = ("https://query1.finance.yahoo.com/v10/finance/quoteSummary/%s?modules=%s&crumb=%s"
+                               % (urllib.parse.quote(sym), mods, urllib.parse.quote(c2)))
+                        r = json.load(_open(url))["quoteSummary"]["result"][0]
+                    except Exception:
+                        r = None
+        except Exception:
+            r = None
+    if r is None:
+        # Yahoo anahtari yok -> anahtarsiz tablolardan hesapla (kurumsal sahiplik eksik kalir)
+        fb = fund_from_ts(sym)
+        if not fb.get("ok"):
+            return {"ok": False, "error": "veri yok"}
+        degraded = True
+        r = {"financialData": {"earningsGrowth": fb.get("earningsGrowth"), "returnOnEquity": fb.get("roe")},
+             "defaultKeyStatistics": {"sharesOutstanding": fb.get("shares")},
+             "incomeStatementHistory": {"incomeStatementHistory": [{"netIncome": n} for n in fb.get("netsAnnual") or []]}}
 
     fd = r.get("financialData", {}) or {}
     ks = r.get("defaultKeyStatistics", {}) or {}
@@ -680,7 +740,7 @@ def fetch_canslim(sym):
     grade = "A" if pct >= 80 else "B" if pct >= 65 else "C" if pct >= 50 else "D" if pct >= 35 else "E"
     return {"ok": True, "symbol": sym, "name": pr.get("longName") or pr.get("shortName"),
             "criteria": crit, "score": score, "max": maxs, "pct": pct, "grade": grade,
-            "market": mkt}
+            "market": mkt, "degraded": degraded}
 
 _spot_cache = {"t": 0, "data": None}
 SPOT_MAP = {"XAUUSD": "XAU", "XAGUSD": "XAG"}
