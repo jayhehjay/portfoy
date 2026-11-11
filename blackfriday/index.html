@@ -159,7 +159,8 @@ const ago=ts=>{if(!ts)return'—';const d=Date.now()/1000-ts;if(d<90)return'az �
 const until=ts=>{if(!ts)return'—';const d=ts-Date.now()/1000;if(d<=0)return'şimdi';if(d<3600)return Math.round(d/60)+' dk sonra';return (d/3600).toFixed(1)+' sa sonra'};
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2800)}
-async function api(path,method='GET',body){const r=await fetch(path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return r.json()}
+const BASE=location.pathname.endsWith('/')?location.pathname.slice(0,-1):location.pathname.replace(/\/[^/]*$/,'');
+async function api(path,method='GET',body){const r=await fetch(BASE+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});return r.json()}
 
 let catalog={},state=null,lastQuery='';
 

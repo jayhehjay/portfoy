@@ -9,6 +9,16 @@ import http.cookiejar, json, os, functools, re, threading, time
 
 PORT = 8000
 DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ---- Black Friday Tracker (blackfriday/) aynı sunucuda /blackfriday altında yayınlanır ----
+BF_PREFIX = "/blackfriday"
+try:
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location("bf_server", os.path.join(DIR, "blackfriday", "server.py"))
+    bf = _ilu.module_from_spec(_spec); _spec.loader.exec_module(bf)
+except Exception as _e:
+    bf = None
+    print("blackfriday yüklenemedi:", _e)
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
 _cj = http.cookiejar.CookieJar()
@@ -1834,7 +1844,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store, max-age=0")
         super().end_headers()
 
+    def _bf(self, method):
+        """/blackfriday/... isteklerini Black Friday Tracker'a aktar. True = yanıtlandı."""
+        p = urllib.parse.urlparse(self.path)
+        if not bf or not (p.path == BF_PREFIX or p.path.startswith(BF_PREFIX + "/")):
+            return False
+        if p.path == BF_PREFIX:                       # /blackfriday -> /blackfriday/
+            self.send_response(301); self.send_header("Location", BF_PREFIX + "/"); self.end_headers()
+            return True
+        sub = p.path[len(BF_PREFIX):] or "/"
+        if sub in ("/state.json", "/stores.json", "/watchlist.json"):
+            bf._json(self, {"ok": False, "error": "erişim yok"}, 403); return True
+        body = None
+        if method in ("POST", "DELETE"):
+            try:
+                body = bf._body(self)
+            except Exception as e:
+                bf._json(self, {"ok": False, "error": "geçersiz JSON: %s" % e}, 400); return True
+        if not bf.route(self, method, sub, urllib.parse.parse_qs(p.query), body):
+            bf._json(self, {"ok": False, "error": "bulunamadı"}, 404)
+        return True
+
+    def do_DELETE(self):
+        if self._bf("DELETE"):
+            return
+        _json(self, {"ok": False, "error": "bilinmeyen uç"})
+
     def do_POST(self):
+        if self._bf("POST"):
+            return
         p = urllib.parse.urlparse(self.path)
         if p.path == "/api/watch":
             try:
@@ -1851,6 +1889,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return _json(self, {"ok": False, "error": "bilinmeyen uç"})
 
     def do_GET(self):
+        if self._bf("GET"):
+            return
         p = urllib.parse.urlparse(self.path)
         if p.path.startswith("/api/"):
             qs = urllib.parse.parse_qs(p.query)
@@ -2204,5 +2244,7 @@ if __name__ == "__main__":
     with socketserver.ThreadingTCPServer((host, port), handler) as httpd:
         keep_alive()
         notify_loop()
-        print("Portföy sunucusu: port %d" % port)
+        if bf:
+            bf.start_scheduler()         # Black Friday: 6 saatte bir fiyat taraması
+        print("Portföy sunucusu: port %d  (Black Friday Tracker: /blackfriday/)" % port)
         httpd.serve_forever()

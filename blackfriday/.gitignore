@@ -2,3 +2,4 @@ state.json
 state.json.tmp
 stores.json
 watchlist.json
+__pycache__/
