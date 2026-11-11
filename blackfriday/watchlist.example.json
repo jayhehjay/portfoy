@@ -1,0 +1,10 @@
+{
+  "watch": [
+    {"q": "airpods 4", "maxPrice": 1300},
+    {"q": "airpods pro 3"},
+    {"q": "playstation 5 slim", "maxPrice": 4500}
+  ],
+  "urls": [
+    {"url": "https://www.elgiganten.se/product/...", "maxPrice": null}
+  ]
+}

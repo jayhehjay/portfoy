@@ -1,0 +1,39 @@
+# Black Friday Tracker — her 6 saatte bir takip listesini tarar ve Telegram / ntfy ile bildirir.
+# Gerekli: Settings → Secrets and variables → Actions:
+#   TELEGRAM_TOKEN, TELEGRAM_CHAT_ID   (veya BF_NTFY_TOPIC)
+# Takip listesi: blackfriday/watchlist.json dosyasına yazılır (örnek: watchlist.example.json).
+# Fiyat geçmişi çalıştırmalar arasında Actions cache ile taşınır.
+name: Black Friday Tracker
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fiyat geçmişini geri yükle
+        uses: actions/cache/restore@v4
+        with:
+          path: blackfriday/state.json
+          key: bf-state-${{ github.run_id }}
+          restore-keys: bf-state-
+      - name: Takip listesini durum dosyasına aktar
+        run: python blackfriday/tracker.py --import-watchlist blackfriday/watchlist.json
+      - name: Tara ve bildir
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BF_NTFY_TOPIC: ${{ secrets.BF_NTFY_TOPIC }}
+          BF_NOTIFY: ${{ vars.BF_NOTIFY }}
+        run: python blackfriday/tracker.py --once
+      - name: Fiyat geçmişini sakla
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: blackfriday/state.json
+          key: bf-state-${{ github.run_id }}
