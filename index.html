@@ -1995,7 +1995,8 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
   function applyBrokerSync(){
     if(!IS_OWNER) return;                               // SADECE sahip: paylasim linki bos kalmali
     if(typeof isPreview!=='undefined' && isPreview) return;
-    var done=null; try{ done=localStorage.getItem('portfoyDataVer'); }catch(e){}
+    var VKEY=LS_KEY+'_dataVer';
+    var done=null; try{ done=localStorage.getItem(VKEY); }catch(e){}
     if(done===DATA_VER) return;
     Object.keys(SYNC_NEW).forEach(function(k){
       if(!state.companies[k]){ var b=SYNC_NEW[k]; state.companies[k]={name:b.name,ticker:b.ticker,
@@ -2008,7 +2009,7 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
       if(a!=null){ c.antal=a; c.qty=a; } else { delete c.antal; c.qty=null; } });
     SYNC_DEL.forEach(function(k){ if(state.companies[k]){ delete state.companies[k];
       if(typeof markDeleted==='function') markDeleted(k); } });
-    try{ localStorage.setItem('portfoyDataVer', DATA_VER); }catch(e){}
+    try{ localStorage.setItem(VKEY, DATA_VER); localStorage.removeItem('portfoyDataVer'); }catch(e){}
     if(typeof persist==='function') persist();
   }
   try{ applyBrokerSync(); }catch(e){}
