@@ -447,6 +447,43 @@ def fetch_dividends(sym):
             "lastAmount": items[-1]["amount"],
             "lastDate": time.strftime("%Y-%m-%d", time.gmtime(items[-1]["date"]))}
 
+def _div_payments(sym, months=40):
+    """Son ~3 yilin temettu odemeleri (tarih + tutar). Crumb gerektirmez."""
+    url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1mo&range=5y&events=div"
+           % urllib.parse.quote(sym))
+    try:
+        res = json.load(_open(url))["chart"]["result"][0]
+        ev = (res.get("events") or {}).get("dividends") or {}
+        cur = (res.get("meta") or {}).get("currency")
+    except Exception:
+        return {"ok": False}
+    cut = time.time() - months * 30.5 * 86400
+    pays = sorted(({"date": time.strftime("%Y-%m-%d", time.gmtime(v["date"])),
+                    "ts": v["date"], "amount": v["amount"]}
+                   for v in ev.values() if v.get("amount") and v.get("date") and v["date"] >= cut),
+                  key=lambda x: x["ts"])
+    if not pays:
+        return {"ok": True, "symbol": sym, "currency": cur, "hasDividend": False, "payments": []}
+    y_cut = time.time() - 370 * 86400
+    ttm = round(sum(p["amount"] for p in pays if p["ts"] >= y_cut), 6)
+    return {"ok": True, "symbol": sym, "currency": cur, "hasDividend": True,
+            "payments": pays, "ttm": ttm, "perYear": len([p for p in pays if p["ts"] >= y_cut])}
+
+def fetch_divcal(syms):
+    """Birden cok sembol icin temettu odemeleri -- telefondan tek istek."""
+    out, lock = [], threading.Lock()
+    def go(s):
+        r = _div_payments(s)
+        if r.get("ok"):
+            with lock:
+                out.append(r)
+    ths = [threading.Thread(target=go, args=(s,)) for s in syms[:60]]
+    for t_ in ths:
+        t_.start()
+    for t_ in ths:
+        t_.join(timeout=25)
+    return {"ok": True, "items": out, "today": time.strftime("%Y-%m-%d")}
+
 def _yoy(rows, key):
     """Son ceyrek vs 1 yil onceki ayni ceyrek (tarih eslesmeli)."""
     if len(rows) < 2: return None
@@ -1919,6 +1956,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 q = (qs.get("q") or [""])[0].strip()
                 try:
                     return _json(self, fetch_search(q) if q else {"ok": True, "items": []})
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/divcal":
+                ss = [x.strip() for x in ((qs.get("s") or [""])[0]).split(",") if x.strip()]
+                try:
+                    return _json(self, fetch_divcal(ss))
                 except Exception as e:
                     return _json(self, {"ok": False, "error": str(e)})
             sym = (qs.get("symbol") or [""])[0].strip()
