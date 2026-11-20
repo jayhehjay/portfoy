@@ -1993,6 +1993,7 @@ body:has(#modal.show) .fab-add, body:has(.drawer.show) .fab-add, body:has(#txMod
     cbrain:{name:'cBrain',ticker:'CBRAIN',ysym:'CBRAIN.CO',country:'🇩🇰',sector:'Yazılım',type:'stock'}
   };
   function applyBrokerSync(){
+    if(!IS_OWNER) return;                               // SADECE sahip: paylasim linki bos kalmali
     if(typeof isPreview!=='undefined' && isPreview) return;
     var done=null; try{ done=localStorage.getItem('portfoyDataVer'); }catch(e){}
     if(done===DATA_VER) return;
