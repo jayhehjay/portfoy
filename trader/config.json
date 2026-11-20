@@ -1,0 +1,15 @@
+{
+  "capital": 10000,
+  "risk_pct": 0.015,
+  "max_lev": 1.0,
+  "kill_dd": 0.25,
+  "sleeves": [
+    {"id": "btc-trend",  "symbol": "BTC-USD", "strategy": "donchian", "params": {"entry_n": 55, "exit_n": 20, "sl_atr": 3.0}, "cost_bps": 10},
+    {"id": "eth-trend",  "symbol": "ETH-USD", "strategy": "donchian", "params": {"entry_n": 55, "exit_n": 20, "sl_atr": 3.0}, "cost_bps": 12},
+    {"id": "qqq-trend",  "symbol": "QQQ",     "strategy": "donchian", "params": {"entry_n": 55, "exit_n": 20, "sl_atr": 3.0}, "cost_bps": 2},
+    {"id": "spy-trend",  "symbol": "SPY",     "strategy": "donchian", "params": {"entry_n": 55, "exit_n": 20, "sl_atr": 3.0}, "cost_bps": 2},
+    {"id": "gold-trend", "symbol": "GC=F",    "strategy": "donchian", "params": {"entry_n": 55, "exit_n": 20, "sl_atr": 3.0}, "cost_bps": 3},
+    {"id": "spy-dip",    "symbol": "SPY",     "strategy": "pullback", "params": {"trend_n": 200, "rsi_lo": 10, "exit_n": 5, "sl_atr": 3.0, "max_hold": 10}, "cost_bps": 2},
+    {"id": "qqq-dip",    "symbol": "QQQ",     "strategy": "pullback", "params": {"trend_n": 200, "rsi_lo": 10, "exit_n": 5, "sl_atr": 3.0, "max_hold": 10}, "cost_bps": 2}
+  ]
+}
