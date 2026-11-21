@@ -124,6 +124,9 @@ AUTO_SYMS = ["BTC-USD", "ETH-USD"]
 AUTO_USD = 100.0          # her işlem tutarı
 AUTO_MAX_POS = 2
 AUTO_STOP = 0.015
+AUTO_RSI = 35
+AUTO_GAP = 0.0025
+SERIES_N = 144            # grafikte son 12 saat (5 dk'lık 144 mum)
 AUTO_MAX_HOLD = 3 * 3600
 AUTO_COOLDOWN = 15 * 60
 AUTO_FILE = os.path.join(DIR, "bot_auto.json")
@@ -139,6 +142,19 @@ def _ind(closes, n=20, rn=14):
         d = closes[i] - closes[i - 1]; g += max(d, 0); l += max(-d, 0)
     rsi = 100.0 if l == 0 else 100 - 100 / (1 + g / l)
     return {"c": closes[-1], "sma": m, "lo": m - 2 * sd, "hi": m + 2 * sd, "rsi": rsi}
+
+def _series(closes, ts, n=20, rn=14):
+    """Grafik için son SERIES_N mumun bant ve RSI serisi."""
+    out = {"t": [], "c": [], "sma": [], "lo": [], "hi": [], "rsi": []}
+    for i in range(max(len(closes) - SERIES_N, max(n, rn + 1)), len(closes)):
+        w = closes[i - n + 1:i + 1]; m = sum(w) / n; sd = (sum((x - m) ** 2 for x in w) / n) ** 0.5
+        g = l = 0.0
+        for j in range(i - rn + 1, i + 1):
+            d = closes[j] - closes[j - 1]; g += max(d, 0); l += max(-d, 0)
+        rsi = 100.0 if l == 0 else 100 - 100 / (1 + g / l)
+        out["t"].append(ts[i]); out["c"].append(round(closes[i], 4)); out["sma"].append(round(m, 4))
+        out["lo"].append(round(m - 2 * sd, 4)); out["hi"].append(round(m + 2 * sd, 4)); out["rsi"].append(round(rsi, 1))
+    return out
 
 def _aload():
     if os.path.exists(AUTO_FILE):
@@ -186,7 +202,7 @@ def auto_tick():
                 else:
                     status = "pozisyonda (%+.2f%%)" % (pnl_pct * 100)
             else:
-                signal = ind["c"] < ind["lo"] and ind["rsi"] < 35 and (ind["sma"] / ind["c"] - 1) >= 0.0025   # ortalamaya dönüş payı maliyeti aşmalı
+                signal = ind["c"] < ind["lo"] and ind["rsi"] < AUTO_RSI and (ind["sma"] / ind["c"] - 1) >= AUTO_GAP   # ortalamaya dönüş payı maliyeti aşmalı
                 cool = now - s["cool"].get(sym, 0) < AUTO_COOLDOWN
                 if signal and not cool and s["cash"] >= AUTO_USD and len(s["pos"]) < AUTO_MAX_POS:
                     fill = px * (1 + k); qty = AUTO_USD / fill
@@ -198,7 +214,10 @@ def auto_tick():
                     status = "sinyal var, ama bekleme süresinde"
                 elif ind["c"] < ind["lo"]:
                     status = "alt bantta, RSI henüz yüksek (%.0f)" % ind["rsi"]
-            _eval[sym] = {"name": nm, "price": px, "sma": ind["sma"], "lo": ind["lo"], "rsi": ind["rsi"], "status": status, "t": now}
+            ts = [pt[0] for pt in ch["points"]]
+            _eval[sym] = {"name": nm, "price": px, "sma": ind["sma"], "lo": ind["lo"], "hi": ind["hi"], "rsi": ind["rsi"], "status": status, "t": now,
+                          "gap": ind["sma"] / ind["c"] - 1, "series": _series(closes, ts),
+                          "th": {"rsi": AUTO_RSI, "gap": AUTO_GAP, "stop": AUTO_STOP, "hold": AUTO_MAX_HOLD}}
         total = s["cash"] + sum(p["qty"] * (_eval.get(sy, {}).get("price") or p["avg"]) for sy, p in s["pos"].items())
         if not s["eq"] or now - s["eq"][-1][0] >= 300:
             s["eq"].append([now, round(total, 2)])
@@ -213,7 +232,9 @@ def auto_state():
     for sym, p in s["pos"].items():
         px = _eval.get(sym, {}).get("price") or p["avg"]; val = p["qty"] * px; total += val
         pos.append({"symbol": sym, "name": NAMES.get(sym, sym), "avg": p["avg"], "price": px, "value": val,
-                    "pnl": val - p["cost"], "pnl_pct": (val / p["cost"] - 1) * 100, "opened": p["opened"]})
+                    "pnl": val - p["cost"], "pnl_pct": (val / p["cost"] - 1) * 100, "opened": p["opened"],
+                    "stop_px": p["avg"] * (1 - AUTO_STOP), "target_px": _eval.get(sym, {}).get("sma"),
+                    "time_left": max(0, AUTO_MAX_HOLD - (int(time.time()) - p["opened"]))})
     trades = [l for l in s["log"] if l["kind"] == "sell"]
     return {"cash": s["cash"], "start": s["start"], "total": total, "pnl": total - s["start"], "positions": pos,
             "log": s["log"][-40:][::-1], "marks": s["marks"], "eval": _eval, "last_tick": _last_tick[0],
