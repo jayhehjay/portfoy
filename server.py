@@ -6,6 +6,7 @@
 #  /api/news  -> şirkete özel son haberler  (RSS)
 import http.server, socketserver, urllib.request, urllib.parse, urllib.error
 import http.cookiejar, json, os, functools, re, threading, time
+import botlive   # canlı sanal bot (/bot.html)
 
 PORT = 8000
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1885,6 +1886,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return _json(self, {"ok": True, "count": len(syms)})
             except Exception as e:
                 return _json(self, {"ok": False, "error": str(e)})
+        if p.path == "/api/bot/order":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                b = json.loads(self.rfile.read(n).decode("utf-8") or "{}")
+                return _json(self, botlive.order(b.get("side"), b.get("symbol"), b.get("usd")))
+            except Exception as e:
+                return _json(self, {"ok": False, "error": str(e)})
+        if p.path == "/api/bot/reset":
+            return _json(self, botlive.reset())
         return _json(self, {"ok": False, "error": "bilinmeyen uç"})
 
     def do_GET(self):
@@ -1900,6 +1910,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return _json(self, check_and_notify())
             if p.path == "/api/ping":
                 return _json(self, {"ok": True, "t": int(time.time())})
+            if p.path == "/api/bot/state":
+                try:
+                    return _json(self, botlive.state())
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
+            if p.path == "/api/bot/chart":
+                try:
+                    return _json(self, dict(botlive.chart((qs.get("symbol") or ["SI=F"])[0]), ok=True))
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/fx":
                 try:
                     return _json(self, fetch_fx())
@@ -2247,5 +2267,6 @@ if __name__ == "__main__":
     with socketserver.ThreadingTCPServer((host, port), handler) as httpd:
         keep_alive()
         notify_loop()
+        botlive.start_auto()
         print("Portföy sunucusu: port %d" % port)
         httpd.serve_forever()
