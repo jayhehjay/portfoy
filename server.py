@@ -1895,6 +1895,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return _json(self, {"ok": False, "error": str(e)})
         if p.path == "/api/bot/reset":
             return _json(self, botlive.reset())
+        if p.path == "/api/bot/auto_reset":
+            return _json(self, botlive.auto_reset())
         return _json(self, {"ok": False, "error": "bilinmeyen uç"})
 
     def do_GET(self):

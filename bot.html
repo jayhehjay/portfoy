@@ -42,6 +42,12 @@
   .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
   .tab { padding:5px 10px; border-radius:999px; border:1px solid var(--line); font-size:13px; cursor:pointer; color:var(--mut); }
   .tab.on { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .cond { display:grid; grid-template-columns: 22px 1fr auto; gap:4px 8px; font-size:13px; align-items:center; margin:8px 0; }
+  .ck { width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
+  .ck.y { background:var(--up); color:#06210f; } .ck.n { background:#2a303a; color:var(--mut); }
+  .need { background:#10202f; border:1px solid #1e3a55; border-radius:8px; padding:8px 10px; font-size:13px; margin:6px 0; }
+  .exit { background:#1d1a10; border:1px solid #4a3f1c; border-radius:8px; padding:8px 10px; font-size:13px; margin:6px 0; }
+  details.how { font-size:12.5px; color:var(--mut); margin-top:8px; } details.how p { margin:6px 0; }
 </style>
 </head>
 <body>
@@ -54,13 +60,23 @@
   <div class="card banner" id="banner" hidden></div>
 
   <div class="card">
-    <div class="mut" style="font-size:13px">Sanal hesap toplamı</div>
+    <div class="mut" style="font-size:13px">Elle hesap toplamı (senin işlemlerin)</div>
     <div class="big" id="total">—</div>
     <div class="row"><span id="pnl">—</span><span class="mut">nakit <span id="cash">—</span></span></div>
   </div>
 
+  <div class="card" id="autoCard">
+    <h2>Otomatik bot · canlı <span class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">(Bitcoin + Ethereum, kendi kendine)</span></h2>
+    <div class="row"><span style="font-size:26px;font-weight:650;font-variant-numeric:tabular-nums" id="aTotal">—</span><span id="aPnl">—</span><span class="mut" id="aStat"></span></div>
+    <p class="mut" style="margin:6px 0 10px;font-size:12.5px" id="aRule"></p>
+    <div id="aEval"></div>
+    <h2 style="margin-top:12px">Botun kararları</h2>
+    <div class="log" id="aLog"><span class="mut">Bot henüz işlem yapmadı. Fiyat alt banda inip RSI düşünce alır; şu an bekliyor.</span></div>
+    <div style="text-align:right;margin-top:8px"><button class="ghost" id="aReset">Otomatik botu sıfırla</button></div>
+  </div>
+
   <div class="card">
-    <h2>Sanal işlem</h2>
+    <h2>Sanal işlem (elle)</h2>
     <div class="tabs" id="tabs"></div>
     <div class="row" style="margin-bottom:8px"><span style="font-size:24px;font-weight:650;font-variant-numeric:tabular-nums" id="selPrice">—</span><span id="selChg" class="mut"></span><span class="mut" id="selAge"></span></div>
     <div id="selChart" style="min-height:120px"></div>
@@ -104,7 +120,7 @@
 
   async function api(path, opt) { const r = await fetch(path, opt); return r.json(); }
 
-  function lineSVG(points, entry, color) {
+  function lineSVG(points, entry, color, marks) {
     if (!points || points.length < 2) return '<div class="mut" style="padding:40px 0;text-align:center">Grafik verisi yok (piyasa kapalı olabilir).</div>';
     const W = 640, H = 170, m = { l: 6, r: 6, t: 10, b: 18 };
     const ys = points.map((p) => p[1]); let lo = Math.min(...ys), hi = Math.max(...ys);
@@ -119,6 +135,8 @@
     let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bugünkü fiyat grafiği"><defs><linearGradient id="g${color.slice(1)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`;
     s += `<path d="${area}" fill="url(#g${color.slice(1)})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2"/>`;
     if (entry) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(entry)}" y2="${Y(entry)}" stroke="#8b94a3" stroke-dasharray="5 4"/><text x="${m.l + 2}" y="${Y(entry) - 4}" fill="#8b94a3" font-size="11">alış ${f2(entry, dp(entry))}</text>`;
+    (marks || []).forEach((k) => { if (k.t < t0 || k.t > t1 + 600) return; const cx = X(Math.min(k.t, t1)), cy = Y(Math.min(Math.max(k.px, lo), hi)); const up = k.side === "buy";
+      s += `<polygon points="${cx},${cy + (up ? -9 : 9)} ${cx - 6},${cy + (up ? 3 : -3)} ${cx + 6},${cy + (up ? 3 : -3)}" fill="${up ? "#2fbf71" : "#ef5b5b"}" stroke="#0e1116"/>`; });
     s += `<circle cx="${X(last[0])}" cy="${Y(last[1])}" r="4.5" fill="${color}"/>`;
     s += `<text x="${W - m.r}" y="${m.t + 6}" text-anchor="end" fill="#8b94a3" font-size="11">en yüksek ${f2(Math.max(...ys), dp(hi))}</text>`;
     s += `<text x="${W - m.r}" y="${H - 4}" text-anchor="end" fill="#8b94a3" font-size="11">en düşük ${f2(Math.min(...ys), dp(lo))}</text>`;
@@ -153,6 +171,84 @@
     $("log").innerHTML = S.log.length ? S.log.map((l) => `<div><span class="mut">${new Date(l.t * 1000).toLocaleString("tr-TR")}</span> · ${l.txt}</div>`).join("") : '<span class="mut">Henüz işlem yok.</span>';
   }
 
+
+
+  function bandSVG(e, entry, marks) {
+    const s = e.series; if (!s || s.t.length < 5) return "";
+    const W = 640, H = 190, m = { l: 6, r: 6, t: 12, b: 16 };
+    const all = [...s.c, ...s.lo, ...s.hi]; if (entry) all.push(entry);
+    let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * 0.06 || hi * 0.001; lo -= pad; hi += pad;
+    const t0 = s.t[0], t1 = s.t[s.t.length - 1];
+    const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+    const P = (arr) => arr.map((v, i) => (i ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1)).join("");
+    const band = P(s.hi) + s.lo.map((v, i) => "L" + X(s.t[s.t.length - 1 - i]).toFixed(1) + " " + Y(s.lo[s.lo.length - 1 - i]).toFixed(1)).join("") + "Z";
+    let o = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Fiyat ve Bollinger bantları, son 12 saat"><path d="${band}" fill="#5aa0ff" fill-opacity=".12"/>`;
+    o += `<path d="${P(s.lo)}" fill="none" stroke="#2fbf71" stroke-opacity=".7" stroke-dasharray="4 3"/><path d="${P(s.hi)}" fill="none" stroke="#ef5b5b" stroke-opacity=".5" stroke-dasharray="4 3"/>`;
+    o += `<path d="${P(s.sma)}" fill="none" stroke="#8b94a3" stroke-dasharray="2 3"/><path d="${P(s.c)}" fill="none" stroke="#e8ebf0" stroke-width="1.8"/>`;
+    if (entry) o += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(entry)}" y2="${Y(entry)}" stroke="#e8b04a" stroke-dasharray="5 4"/><text x="${m.l + 2}" y="${Y(entry) - 4}" fill="#e8b04a" font-size="11">alış ${f2(entry, dp(entry))}</text>`;
+    (marks || []).forEach((k) => { if (k.t < t0 || k.t > t1 + 600) return; const cx = X(Math.min(k.t, t1)), cy = Y(Math.min(Math.max(k.px, lo), hi)), up = k.side === "buy";
+      o += `<polygon points="${cx},${cy + (up ? -9 : 9)} ${cx - 6},${cy + (up ? 3 : -3)} ${cx + 6},${cy + (up ? 3 : -3)}" fill="${up ? "#2fbf71" : "#ef5b5b"}" stroke="#0e1116"/>`; });
+    o += `<circle cx="${X(t1)}" cy="${Y(s.c[s.c.length - 1])}" r="4" fill="#e8ebf0"/>`;
+    o += `<text x="${W - m.r}" y="${m.t - 2}" text-anchor="end" fill="#ef5b5b" font-size="10">üst bant</text><text x="${W - m.r}" y="${H - 3}" text-anchor="end" fill="#2fbf71" font-size="10">alt bant (AL bölgesi altı)</text>`;
+    return o + `<text x="${m.l}" y="${H - 3}" fill="#8b94a3" font-size="10">${clock(t0).slice(0, 5)}</text></svg>`;
+  }
+  function rsiSVG(e) {
+    const s = e.series; if (!s || s.t.length < 5) return "";
+    const W = 640, H = 80, m = { l: 6, r: 6, t: 6, b: 6 }, t0 = s.t[0], t1 = s.t[s.t.length - 1];
+    const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - v / 100) * (H - m.t - m.b);
+    const d = s.rsi.map((v, i) => (i ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1)).join(""), th = e.th.rsi;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="RSI göstergesi"><rect x="${m.l}" y="${Y(th)}" width="${W - m.l - m.r}" height="${Y(0) - Y(th)}" fill="#2fbf71" fill-opacity=".12"/>
+      <line x1="${m.l}" x2="${W - m.r}" y1="${Y(th)}" y2="${Y(th)}" stroke="#2fbf71" stroke-dasharray="4 3"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(70)}" y2="${Y(70)}" stroke="#8b94a3" stroke-opacity=".5" stroke-dasharray="4 3"/>
+      <path d="${d}" fill="none" stroke="#5aa0ff" stroke-width="1.6"/><circle cx="${X(t1)}" cy="${Y(s.rsi[s.rsi.length - 1])}" r="3.5" fill="#5aa0ff"/>
+      <text x="${m.l + 2}" y="${Y(th) - 3}" fill="#2fbf71" font-size="10">RSI ${th} altı = AL şartı</text><text x="${W - m.r}" y="${Y(70) - 3}" text-anchor="end" fill="#8b94a3" font-size="10">70</text></svg>`;
+  }
+  const pc = (v) => (v >= 0 ? "+" : "") + f2(v * 100, 2) + "%";
+  function condRows(e, pos) {
+    const th = e.th, c1 = e.price < e.lo, c2 = e.rsi < th.rsi, c3 = e.gap >= th.gap, n = (c1 ? 1 : 0) + (c2 ? 1 : 0) + (c3 ? 1 : 0);
+    const row = (ok, txt, val) => `<span class="ck ${ok ? "y" : "n"}">${ok ? "✓" : "✗"}</span><span>${txt}</span><span class="mut">${val}</span>`;
+    let html = "";
+    if (pos) {
+      const toT = e.sma / e.price - 1, toS = pos.stop_px / e.price - 1, tl = pos.time_left, hh = Math.floor(tl / 3600), mm = Math.floor((tl % 3600) / 60);
+      html += `<div class="exit"><b>Pozisyondasın</b> (alış ${f2(pos.avg, dp(pos.avg))}, şu an ${pos.pnl >= 0 ? "+" : ""}${f2(pos.pnl_pct, 2)}%). Bot şu şartlardan biri olunca satar:
+        <div class="cond">${row(e.price >= e.sma && pos.pnl_pct > 0.06, "Hedef: fiyat ortalamaya (" + f2(e.sma, dp(e.sma)) + ") dönsün ve kârda olsun", e.price >= e.sma ? (pos.pnl_pct > 0.06 ? "oldu" : "ortalamada ama henüz kârda değil") : pc(toT) + " uzak")}
+        ${row(e.price <= pos.stop_px, "Stop: fiyat " + f2(pos.stop_px, dp(pos.stop_px)) + " altına inerse", pc(toS) + " uzak")}
+        ${row(tl <= 0, "Zaman stopu: 3 saat dolunca", tl > 0 ? hh + " sa " + mm + " dk kaldı" : "doldu")}</div></div>`;
+      return html;
+    }
+    const need = [];
+    if (!c1) need.push(`fiyat <b>${f2(e.lo, dp(e.lo))}</b> altına insin (şu an ${pc(e.lo / e.price - 1)} uzak)`);
+    if (!c2) need.push(`RSI <b>${th.rsi}</b> altına insin (şu an ${f2(e.rsi, 0)})`);
+    if (!c3) need.push(`fiyat ortalamanın en az <b>%${f2(th.gap * 100, 2)}</b> altında olsun (şu an %${f2(Math.max(e.gap, 0) * 100, 2)})`);
+    html += `<div class="cond">${row(c1, "Fiyat alt bandın altında", f2(e.price, dp(e.price)) + " / " + f2(e.lo, dp(e.lo)))}${row(c2, "RSI " + th.rsi + " altında", f2(e.rsi, 0))}${row(c3, "Ortalamaya dönüş payı ≥ %" + f2(th.gap * 100, 2), "%" + f2(Math.max(e.gap, 0) * 100, 2))}</div>`;
+    html += `<div class="need"><b>Giriş şartları: ${n}/3 sağlandı.</b> ` + (n === 3 ? "Bot şimdi AL yapar." : "AL için: " + need.join("; ") + ".") + `</div>`;
+    return html;
+  }
+
+  function renderAuto() {
+    const B = S && S.bot; if (!B) return;
+    $("aTotal").textContent = f2(B.total) + " $";
+    $("aPnl").innerHTML = `<b class="${B.pnl >= 0 ? "up" : "down"}">${sgn(B.pnl)} $ (${sgn(B.pnl / B.start * 100)}%)</b>`;
+    $("aStat").textContent = `nakit ${f2(B.cash)} $ · ${B.trades} işlem` + (B.trades ? ` · ${B.wins} kazançlı` : "");
+    $("aRule").textContent = "Kural: " + B.rule;
+    const syms = Object.keys(B.eval || {});
+    $("aEval").innerHTML = syms.map((sy) => {
+      const e = B.eval[sy], mk = B.marks.filter((m) => m.sym === sy), pos = B.positions.find((p) => p.symbol === sy);
+      return `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="top row" style="justify-content:space-between"><b>${e.name}</b>
+        <span id="ap-${sy}" style="font-variant-numeric:tabular-nums;font-weight:650">${f2(e.price, dp(e.price))} $</span></div>
+        <div class="mut" style="font-size:12.5px;margin-bottom:4px">Durum: <b style="color:var(--fg)">${e.status}</b></div>
+        ${condRows(e, pos)}
+        ${bandSVG(e, pos ? pos.avg : null, mk)}
+        <div class="mut" style="font-size:11.5px;margin:2px 0">Fiyat (beyaz), ortalama (gri kesikli), üst/alt bant · son 12 saat</div>
+        ${rsiSVG(e)}</div>`;
+    }).join("") + `<details class="how"><summary>Bu göstergeler ne demek?</summary>
+      <p><b>Bollinger bantları:</b> Fiyatın son 20 mumluk ortalaması (gri) ve normal salınım sınırları (alt/üst bant). Fiyat alt bandın altına inerse "aşırı düştü" sayılır.</p>
+      <p><b>RSI:</b> 0–100 arası bir hız göstergesi. 35 altı "çok satılmış" demektir, toparlanma ihtimali artar. 70 üstü "çok alınmış".</p>
+      <p><b>Bot ne zaman alır?</b> Üç şart aynı anda sağlanınca. <b>Ne zaman satar?</b> Fiyat ortalamaya dönünce (hedef), alışın %1,5 altına inince (stop) ya da 3 saat dolunca.</p></details>` || '<span class="mut">Bot ilk değerlendirmesini yapıyor (birkaç saniye sürer)…</span>';
+    syms.forEach((sy) => { const el = $("ap-" + sy); if (el) flash(el, "a" + sy, B.eval[sy].price); });
+    $("aLog").innerHTML = B.log.length ? B.log.map((l) => `<div><span class="mut">${new Date(l.t * 1000).toLocaleTimeString("tr-TR")}</span> · <span class="${l.kind === "buy" ? "up" : "down"}">${l.txt}</span></div>`).join("")
+      : '<span class="mut">Bot henüz işlem yapmadı. Fiyat alt banda inip RSI düşünce alır; şu an bekliyor.</span>';
+  }
+
   function renderSel() {
     const cd = chartData[SEL]; if (!cd) return;
     const first = cd.points.length ? cd.points[0][1] : cd.price, chg = (cd.price / (cd.prev_close || first) - 1) * 100;
@@ -161,7 +257,7 @@
     const age = cd.price_time ? Math.round((cd.now - cd.price_time) / 60) : null;
     $("selAge").textContent = age == null ? "" : age <= 2 ? "· güncel" : `· son fiyat ${age >= 120 ? Math.round(age / 60) + " sa" : age + " dk"} önce`;
     const own = S && S.positions.find((p) => p.symbol === SEL);
-    $("selChart").innerHTML = lineSVG(cd.points, own ? own.avg : null, chg >= 0 ? "#2fbf71" : "#ef5b5b");
+    $("selChart").innerHTML = lineSVG(cd.points, own ? own.avg : null, chg >= 0 ? "#2fbf71" : "#ef5b5b", S && S.bot ? S.bot.marks.filter((m) => m.sym === SEL) : []);
     const stale = age != null && age > 30;
     const b = $("banner"); b.hidden = !stale;
     if (stale) b.textContent = `${S && S.symbols[SEL] || SEL} piyasası şu an kapalı görünüyor (son fiyat ${age >= 120 ? Math.round(age / 60) + " saat" : age + " dk"} önce). Fiyat açılana kadar oynamaz. Kripto (Bitcoin, Ethereum) 7/24 açıktır, hareketi onda görebilirsin.`;
@@ -174,9 +270,9 @@
     try {
       S = await api("/api/bot/state"); if (!S.ok) throw new Error(S.error);
       if (!SEL) { SEL = S.positions[0] ? S.positions[0].symbol : "BTC-USD"; buildTabs(); }
-      const need = new Set([SEL, ...S.positions.map((p) => p.symbol)]);
+      const need = new Set([SEL, "BTC-USD", "ETH-USD", ...S.positions.map((p) => p.symbol)]);
       await Promise.all([...need].map(loadChart));
-      renderState(); renderSel();
+      renderState(); renderAuto(); renderSel();
     } catch (e) { $("dot").classList.add("off"); $("upd").textContent = "bağlantı yok, yeniden deniyorum…"; }
   }
   function buildTabs() {
@@ -200,6 +296,7 @@
   $("buyBtn").onclick = () => order("buy"); $("sellBtn").onclick = () => order("sell");
   $("reset").onclick = async () => { if (confirm("Sanal hesap 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/reset", { method: "POST", body: "{}" }); await tick(); } };
 
+  $("aReset").onclick = async () => { if (confirm("Otomatik bot 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/auto_reset", { method: "POST", body: "{}" }); await tick(); } };
   tick(); setInterval(tick, 5000);
 </script>
 </body>

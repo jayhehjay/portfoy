@@ -83,7 +83,7 @@ def state():
                     "value": val, "pnl": val - p["cost"], "pnl_pct": (val / p["cost"] - 1) * 100 if p["cost"] else 0,
                     "price_time": ptime, "opened": p.get("opened")})
     return {"ok": True, "now": int(time.time()), "cash": s["cash"], "start": s["start"], "total": total,
-            "pnl": total - s["start"], "positions": pos, "log": s["log"][-30:][::-1], "auto": _auto(), "symbols": NAMES}
+            "pnl": total - s["start"], "positions": pos, "log": s["log"][-30:][::-1], "auto": _auto(), "symbols": NAMES, "bot": auto_state()}
 
 def order(side, sym, usd):
     sym = _check_sym(sym); k = COST_BPS / 1e4; now = int(time.time())
@@ -115,6 +115,138 @@ def reset():
         _save({"cash": START_CASH, "start": START_CASH, "pos": {}, "log": []})
     return {"ok": True}
 
+
+# ====================== OTOMATİK CANLI BOT (sanal) ======================
+# Kural ("düşükten al, ortalamaya dönünce sat"), 5 dakikalık mumlar, dakikada bir karar:
+#   AL : fiyat alt Bollinger bandının (SMA20 - 2*sapma) altında VE RSI(14) < 35
+#   SAT: fiyat SMA20'ye dönünce (hedef)  |  giriş fiyatından %1,5 düşünce (stop)  |  3 saat dolunca (zaman stopu)
+AUTO_SYMS = ["BTC-USD", "ETH-USD"]
+AUTO_USD = 100.0          # her işlem tutarı
+AUTO_MAX_POS = 2
+AUTO_STOP = 0.015
+AUTO_RSI = 35
+AUTO_GAP = 0.0025
+SERIES_N = 144            # grafikte son 12 saat (5 dk'lık 144 mum)
+AUTO_MAX_HOLD = 3 * 3600
+AUTO_COOLDOWN = 15 * 60
+AUTO_FILE = os.path.join(DIR, "bot_auto.json")
+_eval = {}                # son değerlendirme (sayfada "bot şu an ne düşünüyor")
+_last_tick = [0]
+
+def _ind(closes, n=20, rn=14):
+    if len(closes) < max(n, rn + 1) + 1:
+        return None
+    w = closes[-n:]; m = sum(w) / n; sd = (sum((x - m) ** 2 for x in w) / n) ** 0.5
+    g = l = 0.0
+    for i in range(len(closes) - rn, len(closes)):
+        d = closes[i] - closes[i - 1]; g += max(d, 0); l += max(-d, 0)
+    rsi = 100.0 if l == 0 else 100 - 100 / (1 + g / l)
+    return {"c": closes[-1], "sma": m, "lo": m - 2 * sd, "hi": m + 2 * sd, "rsi": rsi}
+
+def _series(closes, ts, n=20, rn=14):
+    """Grafik için son SERIES_N mumun bant ve RSI serisi."""
+    out = {"t": [], "c": [], "sma": [], "lo": [], "hi": [], "rsi": []}
+    for i in range(max(len(closes) - SERIES_N, max(n, rn + 1)), len(closes)):
+        w = closes[i - n + 1:i + 1]; m = sum(w) / n; sd = (sum((x - m) ** 2 for x in w) / n) ** 0.5
+        g = l = 0.0
+        for j in range(i - rn + 1, i + 1):
+            d = closes[j] - closes[j - 1]; g += max(d, 0); l += max(-d, 0)
+        rsi = 100.0 if l == 0 else 100 - 100 / (1 + g / l)
+        out["t"].append(ts[i]); out["c"].append(round(closes[i], 4)); out["sma"].append(round(m, 4))
+        out["lo"].append(round(m - 2 * sd, 4)); out["hi"].append(round(m + 2 * sd, 4)); out["rsi"].append(round(rsi, 1))
+    return out
+
+def _aload():
+    if os.path.exists(AUTO_FILE):
+        try:
+            return json.load(open(AUTO_FILE))
+        except Exception:
+            pass
+    return {"cash": START_CASH, "start": START_CASH, "pos": {}, "log": [], "marks": [], "cool": {}, "eq": []}
+
+def _asave(s):
+    tmp = AUTO_FILE + ".tmp"; json.dump(s, open(tmp, "w"), ensure_ascii=False); os.replace(tmp, AUTO_FILE)
+
+def auto_tick():
+    """Her çağrıda her sembol için karar verir. Dakikada bir çağrılır."""
+    now = int(time.time()); k = COST_BPS / 1e4
+    with _lock:
+        s = _aload()
+        for sym in AUTO_SYMS:
+            try:
+                ch = chart(sym, "5m", "5d", ttl=20)
+            except Exception:
+                continue
+            closes = [p[1] for p in ch["points"]]
+            if closes: closes[-1] = ch["price"]
+            ind = _ind(closes)
+            if not ind:
+                continue
+            nm = NAMES.get(sym, sym); px = ch["price"]; p = s["pos"].get(sym)
+            status = "bekliyor"
+            if p:
+                pnl_pct = px / p["avg"] - 1; held = now - p["opened"]
+                why = None
+                if px >= ind["sma"] and pnl_pct > 0.0006:
+                    why = "hedef: fiyat ortalamaya döndü"
+                elif pnl_pct <= -AUTO_STOP:
+                    why = "stop: %1,5 düştü"
+                elif held >= AUTO_MAX_HOLD:
+                    why = "zaman doldu (3 saat)"
+                if why:
+                    fill = px * (1 - k); proceeds = p["qty"] * fill; pnl = proceeds - p["cost"]
+                    s["cash"] += proceeds; del s["pos"][sym]; s["cool"][sym] = now
+                    s["log"].append({"t": now, "kind": "sell", "txt": "SAT %s @ %.2f → %+.2f $ (%s)" % (nm, fill, pnl, why)})
+                    s["marks"].append({"t": now, "sym": sym, "side": "sell", "px": fill})
+                    status = "sattı"
+                else:
+                    status = "pozisyonda (%+.2f%%)" % (pnl_pct * 100)
+            else:
+                signal = ind["c"] < ind["lo"] and ind["rsi"] < AUTO_RSI and (ind["sma"] / ind["c"] - 1) >= AUTO_GAP   # ortalamaya dönüş payı maliyeti aşmalı
+                cool = now - s["cool"].get(sym, 0) < AUTO_COOLDOWN
+                if signal and not cool and s["cash"] >= AUTO_USD and len(s["pos"]) < AUTO_MAX_POS:
+                    fill = px * (1 + k); qty = AUTO_USD / fill
+                    s["pos"][sym] = {"qty": qty, "cost": AUTO_USD, "avg": fill, "opened": now}; s["cash"] -= AUTO_USD
+                    s["log"].append({"t": now, "kind": "buy", "txt": "AL %s %.0f $ @ %.2f — fiyat alt banda indi (%.2f < %.2f), RSI %.0f" % (nm, AUTO_USD, fill, ind["c"], ind["lo"], ind["rsi"])})
+                    s["marks"].append({"t": now, "sym": sym, "side": "buy", "px": fill})
+                    status = "aldı"
+                elif signal and cool:
+                    status = "sinyal var, ama bekleme süresinde"
+                elif ind["c"] < ind["lo"]:
+                    status = "alt bantta, RSI henüz yüksek (%.0f)" % ind["rsi"]
+            ts = [pt[0] for pt in ch["points"]]
+            _eval[sym] = {"name": nm, "price": px, "sma": ind["sma"], "lo": ind["lo"], "hi": ind["hi"], "rsi": ind["rsi"], "status": status, "t": now,
+                          "gap": ind["sma"] / ind["c"] - 1, "series": _series(closes, ts),
+                          "th": {"rsi": AUTO_RSI, "gap": AUTO_GAP, "stop": AUTO_STOP, "hold": AUTO_MAX_HOLD}}
+        total = s["cash"] + sum(p["qty"] * (_eval.get(sy, {}).get("price") or p["avg"]) for sy, p in s["pos"].items())
+        if not s["eq"] or now - s["eq"][-1][0] >= 300:
+            s["eq"].append([now, round(total, 2)])
+        s["log"] = s["log"][-200:]; s["marks"] = s["marks"][-200:]; s["eq"] = s["eq"][-600:]
+        _asave(s)
+    _last_tick[0] = now
+
+def auto_state():
+    with _lock:
+        s = _aload()
+    pos, total = [], s["cash"]
+    for sym, p in s["pos"].items():
+        px = _eval.get(sym, {}).get("price") or p["avg"]; val = p["qty"] * px; total += val
+        pos.append({"symbol": sym, "name": NAMES.get(sym, sym), "avg": p["avg"], "price": px, "value": val,
+                    "pnl": val - p["cost"], "pnl_pct": (val / p["cost"] - 1) * 100, "opened": p["opened"],
+                    "stop_px": p["avg"] * (1 - AUTO_STOP), "target_px": _eval.get(sym, {}).get("sma"),
+                    "time_left": max(0, AUTO_MAX_HOLD - (int(time.time()) - p["opened"]))})
+    trades = [l for l in s["log"] if l["kind"] == "sell"]
+    return {"cash": s["cash"], "start": s["start"], "total": total, "pnl": total - s["start"], "positions": pos,
+            "log": s["log"][-40:][::-1], "marks": s["marks"], "eval": _eval, "last_tick": _last_tick[0],
+            "trades": len(trades), "wins": sum(1 for l in trades if "+" in l["txt"].split("→")[1][:3]),
+            "rule": "Alt Bollinger bandı + RSI<35 + yeterli düşüş (%0,25+) → AL 100 $; ortalamaya dönünce SAT; %1,5 stop; 3 sa zaman stopu"}
+
+def auto_reset():
+    with _lock:
+        _asave({"cash": START_CASH, "start": START_CASH, "pos": {}, "log": [], "marks": [], "cool": {}, "eq": []})
+    return {"ok": True}
+
+
 def _auto_step():
     sys.path.insert(0, os.path.join(DIR, "trader"))
     import argparse, portfolio
@@ -131,3 +263,13 @@ def start_auto():
                 pass
             time.sleep(6 * 3600)
     threading.Thread(target=loop, daemon=True).start()
+
+    def live():           # dakikada bir canlı karar
+        time.sleep(10)
+        while True:
+            try:
+                auto_tick()
+            except Exception:
+                pass
+            time.sleep(60)
+    threading.Thread(target=live, daemon=True).start()
