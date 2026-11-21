@@ -54,13 +54,23 @@
   <div class="card banner" id="banner" hidden></div>
 
   <div class="card">
-    <div class="mut" style="font-size:13px">Sanal hesap toplamı</div>
+    <div class="mut" style="font-size:13px">Elle hesap toplamı (senin işlemlerin)</div>
     <div class="big" id="total">—</div>
     <div class="row"><span id="pnl">—</span><span class="mut">nakit <span id="cash">—</span></span></div>
   </div>
 
+  <div class="card" id="autoCard">
+    <h2>Otomatik bot · canlı <span class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">(Bitcoin + Ethereum, kendi kendine)</span></h2>
+    <div class="row"><span style="font-size:26px;font-weight:650;font-variant-numeric:tabular-nums" id="aTotal">—</span><span id="aPnl">—</span><span class="mut" id="aStat"></span></div>
+    <p class="mut" style="margin:6px 0 10px;font-size:12.5px" id="aRule"></p>
+    <div id="aEval"></div>
+    <h2 style="margin-top:12px">Botun kararları</h2>
+    <div class="log" id="aLog"><span class="mut">Bot henüz işlem yapmadı. Fiyat alt banda inip RSI düşünce alır; şu an bekliyor.</span></div>
+    <div style="text-align:right;margin-top:8px"><button class="ghost" id="aReset">Otomatik botu sıfırla</button></div>
+  </div>
+
   <div class="card">
-    <h2>Sanal işlem</h2>
+    <h2>Sanal işlem (elle)</h2>
     <div class="tabs" id="tabs"></div>
     <div class="row" style="margin-bottom:8px"><span style="font-size:24px;font-weight:650;font-variant-numeric:tabular-nums" id="selPrice">—</span><span id="selChg" class="mut"></span><span class="mut" id="selAge"></span></div>
     <div id="selChart" style="min-height:120px"></div>
@@ -104,7 +114,7 @@
 
   async function api(path, opt) { const r = await fetch(path, opt); return r.json(); }
 
-  function lineSVG(points, entry, color) {
+  function lineSVG(points, entry, color, marks) {
     if (!points || points.length < 2) return '<div class="mut" style="padding:40px 0;text-align:center">Grafik verisi yok (piyasa kapalı olabilir).</div>';
     const W = 640, H = 170, m = { l: 6, r: 6, t: 10, b: 18 };
     const ys = points.map((p) => p[1]); let lo = Math.min(...ys), hi = Math.max(...ys);
@@ -119,6 +129,8 @@
     let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Bugünkü fiyat grafiği"><defs><linearGradient id="g${color.slice(1)}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>`;
     s += `<path d="${area}" fill="url(#g${color.slice(1)})"/><path d="${d}" fill="none" stroke="${color}" stroke-width="2"/>`;
     if (entry) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(entry)}" y2="${Y(entry)}" stroke="#8b94a3" stroke-dasharray="5 4"/><text x="${m.l + 2}" y="${Y(entry) - 4}" fill="#8b94a3" font-size="11">alış ${f2(entry, dp(entry))}</text>`;
+    (marks || []).forEach((k) => { if (k.t < t0 || k.t > t1 + 600) return; const cx = X(Math.min(k.t, t1)), cy = Y(Math.min(Math.max(k.px, lo), hi)); const up = k.side === "buy";
+      s += `<polygon points="${cx},${cy + (up ? -9 : 9)} ${cx - 6},${cy + (up ? 3 : -3)} ${cx + 6},${cy + (up ? 3 : -3)}" fill="${up ? "#2fbf71" : "#ef5b5b"}" stroke="#0e1116"/>`; });
     s += `<circle cx="${X(last[0])}" cy="${Y(last[1])}" r="4.5" fill="${color}"/>`;
     s += `<text x="${W - m.r}" y="${m.t + 6}" text-anchor="end" fill="#8b94a3" font-size="11">en yüksek ${f2(Math.max(...ys), dp(hi))}</text>`;
     s += `<text x="${W - m.r}" y="${H - 4}" text-anchor="end" fill="#8b94a3" font-size="11">en düşük ${f2(Math.min(...ys), dp(lo))}</text>`;
@@ -153,6 +165,27 @@
     $("log").innerHTML = S.log.length ? S.log.map((l) => `<div><span class="mut">${new Date(l.t * 1000).toLocaleString("tr-TR")}</span> · ${l.txt}</div>`).join("") : '<span class="mut">Henüz işlem yok.</span>';
   }
 
+
+  function renderAuto() {
+    const B = S && S.bot; if (!B) return;
+    $("aTotal").textContent = f2(B.total) + " $";
+    $("aPnl").innerHTML = `<b class="${B.pnl >= 0 ? "up" : "down"}">${sgn(B.pnl)} $ (${sgn(B.pnl / B.start * 100)}%)</b>`;
+    $("aStat").textContent = `nakit ${f2(B.cash)} $ · ${B.trades} işlem` + (B.trades ? ` · ${B.wins} kazançlı` : "");
+    $("aRule").textContent = "Kural: " + B.rule;
+    const syms = Object.keys(B.eval || {});
+    $("aEval").innerHTML = syms.map((sy) => {
+      const e = B.eval[sy], cd = chartData[sy], mk = B.marks.filter((m) => m.sym === sy);
+      const pos = B.positions.find((p) => p.symbol === sy);
+      return `<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="top row" style="justify-content:space-between"><b>${e.name}</b>
+        <span id="ap-${sy}" style="font-variant-numeric:tabular-nums">${f2(e.price, dp(e.price))} $</span></div>
+        <div class="mut" style="font-size:12.5px">alt bant ${f2(e.lo, dp(e.lo))} · ortalama ${f2(e.sma, dp(e.sma))} · RSI ${f2(e.rsi, 0)} → <b style="color:var(--fg)">${e.status}</b></div>
+        ${cd ? lineSVG(cd.points, pos ? pos.avg : null, "#5aa0ff", mk) : ""}</div>`;
+    }).join("") || '<span class="mut">Bot ilk değerlendirmesini yapıyor (birkaç saniye sürer)…</span>';
+    syms.forEach((sy) => { const el = $("ap-" + sy); if (el) flash(el, "a" + sy, B.eval[sy].price); });
+    $("aLog").innerHTML = B.log.length ? B.log.map((l) => `<div><span class="mut">${new Date(l.t * 1000).toLocaleTimeString("tr-TR")}</span> · <span class="${l.kind === "buy" ? "up" : "down"}">${l.txt}</span></div>`).join("")
+      : '<span class="mut">Bot henüz işlem yapmadı. Fiyat alt banda inip RSI düşünce alır; şu an bekliyor.</span>';
+  }
+
   function renderSel() {
     const cd = chartData[SEL]; if (!cd) return;
     const first = cd.points.length ? cd.points[0][1] : cd.price, chg = (cd.price / (cd.prev_close || first) - 1) * 100;
@@ -161,7 +194,7 @@
     const age = cd.price_time ? Math.round((cd.now - cd.price_time) / 60) : null;
     $("selAge").textContent = age == null ? "" : age <= 2 ? "· güncel" : `· son fiyat ${age >= 120 ? Math.round(age / 60) + " sa" : age + " dk"} önce`;
     const own = S && S.positions.find((p) => p.symbol === SEL);
-    $("selChart").innerHTML = lineSVG(cd.points, own ? own.avg : null, chg >= 0 ? "#2fbf71" : "#ef5b5b");
+    $("selChart").innerHTML = lineSVG(cd.points, own ? own.avg : null, chg >= 0 ? "#2fbf71" : "#ef5b5b", S && S.bot ? S.bot.marks.filter((m) => m.sym === SEL) : []);
     const stale = age != null && age > 30;
     const b = $("banner"); b.hidden = !stale;
     if (stale) b.textContent = `${S && S.symbols[SEL] || SEL} piyasası şu an kapalı görünüyor (son fiyat ${age >= 120 ? Math.round(age / 60) + " saat" : age + " dk"} önce). Fiyat açılana kadar oynamaz. Kripto (Bitcoin, Ethereum) 7/24 açıktır, hareketi onda görebilirsin.`;
@@ -174,9 +207,9 @@
     try {
       S = await api("/api/bot/state"); if (!S.ok) throw new Error(S.error);
       if (!SEL) { SEL = S.positions[0] ? S.positions[0].symbol : "BTC-USD"; buildTabs(); }
-      const need = new Set([SEL, ...S.positions.map((p) => p.symbol)]);
+      const need = new Set([SEL, "BTC-USD", "ETH-USD", ...S.positions.map((p) => p.symbol)]);
       await Promise.all([...need].map(loadChart));
-      renderState(); renderSel();
+      renderState(); renderAuto(); renderSel();
     } catch (e) { $("dot").classList.add("off"); $("upd").textContent = "bağlantı yok, yeniden deniyorum…"; }
   }
   function buildTabs() {
@@ -200,6 +233,7 @@
   $("buyBtn").onclick = () => order("buy"); $("sellBtn").onclick = () => order("sell");
   $("reset").onclick = async () => { if (confirm("Sanal hesap 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/reset", { method: "POST", body: "{}" }); await tick(); } };
 
+  $("aReset").onclick = async () => { if (confirm("Otomatik bot 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/auto_reset", { method: "POST", body: "{}" }); await tick(); } };
   tick(); setInterval(tick, 5000);
 </script>
 </body>
