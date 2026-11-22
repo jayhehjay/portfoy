@@ -7,6 +7,7 @@
 import http.server, socketserver, urllib.request, urllib.parse, urllib.error
 import http.cookiejar, json, os, functools, re, threading, time
 import botlive   # canlı sanal bot (/bot.html)
+import swinglive   # günlük swing botu + Telegram bildirimi
 
 PORT = 8000
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1912,6 +1913,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return _json(self, check_and_notify())
             if p.path == "/api/ping":
                 return _json(self, {"ok": True, "t": int(time.time())})
+            if p.path == "/api/bot/swing":
+                try:
+                    return _json(self, swinglive.get())
+                except Exception as e:
+                    return _json(self, {"ok": False, "error": str(e)})
             if p.path == "/api/bot/state":
                 try:
                     return _json(self, botlive.state())
@@ -2270,5 +2276,8 @@ if __name__ == "__main__":
         keep_alive()
         notify_loop()
         botlive.start_auto()
+        swinglive.NOTIFY = tg_send
+        swinglive.NOTIFY_READY = lambda: all(tg_config())
+        swinglive.start()
         print("Portföy sunucusu: port %d" % port)
         httpd.serve_forever()

@@ -2,3 +2,4 @@ bot_state.json
 *.tmp
 __pycache__/
 bot_auto.json
+swing_notified.json
