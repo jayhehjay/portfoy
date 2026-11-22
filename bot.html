@@ -66,13 +66,35 @@
 
   <div class="card banner" id="banner" hidden></div>
 
+  <div class="card" id="alertBox" hidden style="border-color:#2f7a52;background:#0f2a1e"></div>
+
+  <div class="card" id="swingCard">
+    <h2>Swing bot · günlük <span class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">(gün gün bakar, haftalarca tutar)</span></h2>
+    <div id="swLoading" class="mut">Günlük mumlar hesaplanıyor (ilk açılışta 10–20 sn sürebilir)…</div>
+    <div id="swBody" hidden>
+      <div class="row"><span style="font-size:26px;font-weight:650;font-variant-numeric:tabular-nums" id="swTotal">—</span><span id="swPnl">—</span></div>
+      <div class="mut" style="font-size:12.5px;margin:2px 0 8px" id="swSub"></div>
+      <div id="swNotify"></div>
+      <div id="swEq" style="margin:6px 0"></div>
+      <div id="swAssets"></div>
+      <h2 style="margin-top:14px">İşlem geçmişi · son ~14 ay simülasyon</h2>
+      <div class="scroll th"><table><thead><tr><th>Varlık</th><th>K/Z</th><th>Giriş</th><th>Çıkış</th><th>Neden</th></tr></thead><tbody id="swTrades"></tbody></table></div>
+      <details class="how"><summary>Bu bot nasıl karar veriyor?</summary>
+        <p><b>4 analiz:</b> (1) <b>Trend:</b> fiyat 200 günlük ortalamanın üstünde mi (zorunlu). (2) <b>Direnç kırılımı:</b> son 20 günün zirvesi aşıldı mı. (3) <b>RSI(14):</b> 50 üstünde mi (momentum var mı). (4) <b>Bollinger orta bandı:</b> fiyat 20 günlük ortalamanın üstünde mi.</p>
+        <p><b>Giriş:</b> trend şart ve toplam en az 3/4 onay. <b>Çıkış:</b> fiyat 200 günlük ortalamanın altında kapanırsa, ya da destek (son 10 günün dibi) kırılırsa, ya da stop (3×ATR) çalışırsa.</p>
+        <p><b>Önemli:</b> Karar günlük kapanışta verilir, işlem ertesi açılışta yapılır. Bu yüzden bot günlerce "bekliyor" kalabilir. Düşen piyasada (200 günlüğün altı) bot nakitte kalır, bu tasarım gereği.</p>
+        <p>Hesap, geçmiş fiyatlardan her seferinde yeniden hesaplanan bir simülasyondur (son ~14 ay). Geçmiş performans garanti değildir; sanal deneydir.</p></details>
+    </div>
+  </div>
+
+
   <div class="card">
     <div class="mut" style="font-size:13px">Elle hesap toplamı (senin işlemlerin)</div>
     <div class="big" id="total">—</div>
     <div class="row"><span id="pnl">—</span><span class="mut">nakit <span id="cash">—</span></span></div>
   </div>
 
-  <div class="card" id="autoCard">
+  <details class="card" id="autoCard"><summary style="cursor:pointer"><b>Dakikalık bot</b> <span class="mut">(durduruldu · eski deney: kısa vadede kâr üretmedi)</span></summary>
     <h2>Otomatik bot · canlı <span class="mut" style="text-transform:none;letter-spacing:0;font-weight:400">(Bitcoin + Ethereum, kendi kendine)</span></h2>
     <div class="row"><span style="font-size:26px;font-weight:650;font-variant-numeric:tabular-nums" id="aTotal">—</span><span id="aPnl">—</span><span class="mut" id="aStat"></span></div>
     <p class="mut" style="margin:6px 0 10px;font-size:12.5px" id="aRule"></p>
@@ -83,7 +105,7 @@
     <h2 style="margin-top:14px">Botun kararları (günlük)</h2>
     <div class="log" id="aLog"><span class="mut">Bot henüz işlem yapmadı. Fiyat alt banda inip RSI düşünce alır; şu an bekliyor.</span></div>
     <div style="text-align:right;margin-top:8px"><button class="ghost" id="aReset">Otomatik botu sıfırla</button></div>
-  </div>
+  </details>
 
   <div class="card">
     <h2>Sanal işlem (elle)</h2>
@@ -336,6 +358,136 @@
   $("reset").onclick = async () => { if (confirm("Sanal hesap 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/reset", { method: "POST", body: "{}" }); await tick(); } };
 
   $("aReset").onclick = async () => { if (confirm("Otomatik bot 1.000 $'a sıfırlansın mı?")) { await api("/api/bot/auto_reset", { method: "POST", body: "{}" }); await tick(); } };
+
+  // ======================= SWING BOT =======================
+  let SW = null, swPrev = {};
+  const hmd = (t) => new Date(t * 1000).toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  const pcs = (v) => (v >= 0 ? "+" : "") + f2(v, 1) + "%";
+
+  function swingSVG(a, marks) {
+    const s = a.series, n = s.t.length; if (n < 5) return "";
+    const W = 640, H = 250, m = { l: 6, r: 6, t: 14, b: 16 };
+    const vals = [...s.c, ...s.sma200.filter((v) => v != null), ...s.lo.filter((v) => v != null), ...s.up.filter((v) => v != null), a.support, a.resistance].filter((v) => v != null);
+    let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
+    const t0 = s.t[0], t1 = s.t[n - 1];
+    const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+    const P = (arr) => { let d = "", pen = false; arr.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1); pen = true; }); return d; };
+    const idx = s.up.map((v, i) => (v != null ? i : -1)).filter((i) => i >= 0);
+    const band = idx.length ? "M" + idx.map((i) => X(s.t[i]).toFixed(1) + " " + Y(s.up[i]).toFixed(1)).join("L") + "L" + idx.slice().reverse().map((i) => X(s.t[i]).toFixed(1) + " " + Y(s.lo[i]).toFixed(1)).join("L") + "Z" : "";
+    let o = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${a.name} günlük fiyat, 200 günlük ortalama, Bollinger bandı, destek ve direnç"><path d="${band}" fill="#5aa0ff" fill-opacity=".10"/>`;
+    o += `<path d="${P(s.mid)}" fill="none" stroke="#8b94a3" stroke-dasharray="2 3"/><path d="${P(s.sma200)}" fill="none" stroke="#e8b04a" stroke-width="1.8"/><path d="${P(s.c)}" fill="none" stroke="#e8ebf0" stroke-width="1.8"/>`;
+    if (a.resistance != null) o += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(a.resistance)}" y2="${Y(a.resistance)}" stroke="#ef5b5b" stroke-dasharray="6 4" stroke-opacity=".8"/><text x="${W - m.r}" y="${Y(a.resistance) - 3}" text-anchor="end" fill="#ef5b5b" font-size="10">direnç ${f2(a.resistance, dp(a.resistance))}</text>`;
+    if (a.support != null) o += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(a.support)}" y2="${Y(a.support)}" stroke="#2fbf71" stroke-dasharray="6 4" stroke-opacity=".8"/><text x="${W - m.r}" y="${Y(a.support) + 11}" text-anchor="end" fill="#2fbf71" font-size="10">destek ${f2(a.support, dp(a.support))}</text>`;
+    const placed = [], free = (x, y) => { if (placed.some((q) => Math.abs(q[0] - x) < 80 && Math.abs(q[1] - y) < 13)) return false; placed.push([x, y]); return true; };
+    const yy = (v) => Y(Math.min(Math.max(v, lo), hi)), inW = (t) => t >= t0 - 86400 && t <= t1 + 86400 * 2;
+    (marks || []).forEach((tr) => {
+      if (!inW(tr.t_in) && !(tr.t_out && inW(tr.t_out))) return;
+      const x1 = X(Math.max(tr.t_in, t0)), y1 = yy(tr.px_in), win = tr.t_out ? tr.pnl >= 0 : null, col = tr.t_out ? (win ? "#2fbf71" : "#ef5b5b") : "#e8b04a";
+      if (tr.t_out) {
+        const x2 = X(Math.min(tr.t_out, t1)), y2 = yy(tr.px_out);
+        o += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="3" stroke-linecap="round"/>`;
+        o += `<polygon points="${x2},${y2 + 9} ${x2 - 6},${y2 - 3} ${x2 + 6},${y2 - 3}" fill="${col}" transform="rotate(180 ${x2} ${y2 + 3})" stroke="#0e1116"/>`;
+        const ly = y2 + (tr.px_out >= tr.px_in ? -12 : 20), lx = Math.min(x2, W - 80);
+        if (free(lx, ly)) o += `<text x="${lx}" y="${ly}" fill="${col}" font-size="10.5" font-weight="700">SAT ${pcs(tr.pnl_pct)}</text>`;
+      } else o += `<line x1="${x1}" y1="${y1}" x2="${X(t1)}" y2="${y1}" stroke="${col}" stroke-dasharray="3 3"/>`;
+      if (inW(tr.t_in)) {
+        o += `<polygon points="${x1},${y1 - 9} ${x1 - 6},${y1 + 3} ${x1 + 6},${y1 + 3}" fill="#2fbf71" stroke="#0e1116"/>`;
+        const ax = Math.min(Math.max(x1 - 4, 8), W - 90); if (free(ax, y1 + 18)) o += `<text x="${ax}" y="${y1 + 18}" fill="#2fbf71" font-size="10.5" font-weight="700">AL ${f2(tr.px_in, dp(tr.px_in))}</text>`;
+      }
+    });
+    o += `<circle cx="${X(t1)}" cy="${Y(s.c[n - 1])}" r="4" fill="#e8ebf0"/>`;
+    o += `<text x="${m.l}" y="${H - 3}" fill="#8b94a3" font-size="10">${hmd(t0)}</text><text x="${W - m.r}" y="${H - 3}" text-anchor="end" fill="#8b94a3" font-size="10">${hmd(t1)}</text></svg>`;
+    return o;
+  }
+  function rsiSVG2(a) {
+    const s = a.series, n = s.t.length; if (n < 5) return "";
+    const W = 640, H = 76, m = { l: 6, r: 6, t: 6, b: 6 }, t0 = s.t[0], t1 = s.t[n - 1];
+    const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - v / 100) * (H - m.t - m.b);
+    const d = s.rsi.map((v, i) => (v == null ? "" : (i ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1))).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="RSI göstergesi"><rect x="${m.l}" y="${Y(100)}" width="${W - m.l - m.r}" height="${Y(50) - Y(100)}" fill="#2fbf71" fill-opacity=".10"/>
+      <line x1="${m.l}" x2="${W - m.r}" y1="${Y(50)}" y2="${Y(50)}" stroke="#2fbf71" stroke-dasharray="4 3"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(30)}" y2="${Y(30)}" stroke="#8b94a3" stroke-opacity=".5" stroke-dasharray="4 3"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(70)}" y2="${Y(70)}" stroke="#8b94a3" stroke-opacity=".5" stroke-dasharray="4 3"/>
+      <path d="${d}" fill="none" stroke="#5aa0ff" stroke-width="1.6"/><circle cx="${X(t1)}" cy="${Y(s.rsi[n - 1])}" r="3.5" fill="#5aa0ff"/>
+      <text x="${m.l + 2}" y="${Y(50) - 3}" fill="#2fbf71" font-size="10">RSI 50 üstü = momentum var</text><text x="${W - m.r}" y="${Y(70) - 3}" text-anchor="end" fill="#8b94a3" font-size="10">70</text><text x="${W - m.r}" y="${Y(30) - 3}" text-anchor="end" fill="#8b94a3" font-size="10">30</text></svg>`;
+  }
+  function eqSVG(eq) {
+    if (!eq || eq.length < 3) return "";
+    const W = 640, H = 90, m = { l: 6, r: 6, t: 8, b: 14 }, t0 = eq[0][0], t1 = eq[eq.length - 1][0], ys = eq.map((p) => p[1]);
+    let lo = Math.min(...ys, ...[eq[0][1]]), hi = Math.max(...ys); const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad;
+    const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+    const d = eq.map((p, i) => (i ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1)).join(""), up = ys[ys.length - 1] >= ys[0], col = up ? "#2fbf71" : "#ef5b5b";
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Swing hesap değeri"><line x1="${m.l}" x2="${W - m.r}" y1="${Y(ys[0])}" y2="${Y(ys[0])}" stroke="#8b94a3" stroke-dasharray="4 3" stroke-opacity=".6"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2"/>
+      <text x="${m.l}" y="${H - 2}" fill="#8b94a3" font-size="10">${hmd(t0)}</text><text x="${W - m.r}" y="${H - 2}" text-anchor="end" fill="#8b94a3" font-size="10">${hmd(t1)}</text></svg>`;
+  }
+
+  function swingCond(a) {
+    const c = a.conds, d = dp(a.price), row = (ok, txt, val) => `<span class="ck ${ok ? "y" : "n"}">${ok ? "✓" : "✗"}</span><span>${txt}</span><span class="mut">${val}</span>`;
+    const gap = (lvl) => pcs((lvl / a.price - 1) * 100);
+    let h = `<div class="cond">${row(c.trend, "Trend: fiyat 200 günlük ortalamanın üstünde (zorunlu)", f2(a.price, d) + " / " + f2(a.sma200, d))}
+      ${row(c.breakout, "Direnç kırılımı: kapanış 20 günlük zirvenin üstünde", f2(a.resistance, d))}
+      ${row(c.rsi, "RSI(14) 50'nin üstünde", f2(a.rsi, 0))}
+      ${row(c.boll, "Bollinger orta bandının (20 günlük ort.) üstünde", f2(a.mid, d))}</div>`;
+    if (a.pos) {
+      const p = a.pos;
+      h += `<div class="exit"><b>Pozisyondasın</b> · giriş ${hmd(p.t_in)} @ ${f2(p.entry, d)} · şu an <b class="${p.pnl >= 0 ? "up" : "down"}">${pcs(p.pnl_pct)} (${sgn(p.pnl)} $)</b><br>
+        Çıkış şartları (biri olursa satar): kapanış <b>${f2(a.sma200, d)}</b> (200 günlük) altına inerse · kapanış <b>${f2(a.support, d)}</b> (destek) altına inerse · stop <b>${f2(p.stop, d)}</b> (${gap(p.stop)})</div>`;
+    } else if (a.pending === "enter") {
+      h += `<div class="need" style="border-color:#2f7a52;background:#0f2a1e"><b>GİRİŞ ZAMANI.</b> ${a.score}/4 analiz onayladı. Bot sanal alımı yaptı. Önerilen stop: <b>${f2(a.price - (a.stop_dist || 0), d)}</b> (3×ATR).</div>`;
+    } else {
+      const need = [];
+      if (!c.trend) need.push(`fiyat 200 günlük ortalamanın (<b>${f2(a.sma200, d)}</b>) üstüne çıksın (şu an ${gap(a.sma200)} uzak)`);
+      if (!c.breakout) need.push(`kapanış 20 günlük zirvenin (<b>${f2(a.resistance, d)}</b>) üstüne çıksın (${gap(a.resistance)})`);
+      if (!c.rsi) need.push(`RSI 50 üstüne çıksın (şu an ${f2(a.rsi, 0)})`);
+      if (!c.boll) need.push(`kapanış orta bandın (<b>${f2(a.mid, d)}</b>) üstüne çıksın (${gap(a.mid)})`);
+      h += `<div class="need"><b>Giriş için: trend şart + en az 3/4. Şu an ${a.score}/4.</b> ${c.trend ? "Eksikler" : "Önce"}: ${need.join("; ")}.</div>`;
+    }
+    return h;
+  }
+
+  function notifyBox(W) {
+    if (W.notify_ready) return `<div class="need" style="border-color:#2f7a52;background:#0f2a1e">🔔 <b>Telegram bildirimi açık.</b> Giriş ve çıkış zamanı gelince telefonuna mesaj gelir (her gün 09:00–24:00 Türkiye saati arası). <button class="ghost" id="tgTest" style="margin-left:6px">Test mesajı gönder</button> <span id="tgRes" class="mut"></span></div>`;
+    return `<div class="need" style="border-color:#5a4a1f;background:#231e10;color:#f0d9a0">🔕 <b>Telegram bildirimi henüz kurulu değil.</b> Sayfa açıkken uyarı kutusunda görürsün, ama telefona mesaj gelmesi için bir kerelik kurulum gerekir:
+      <ol style="margin:6px 0 0 18px;padding:0">
+        <li>Telegram'da <b>@BotFather</b>'ı aç, <b>/newbot</b> yaz, bir ad ver. Sana bir <b>token</b> verir.</li>
+        <li>Yeni botuna Telegram'dan bir mesaj at ("merhaba"). Sonra <b>@userinfobot</b>'a yaz, sana <b>Id</b> (sayı) verir.</li>
+        <li>Render → <b>portfoy</b> servisi → <b>Environment</b> → iki değişken ekle: <b>TELEGRAM_TOKEN</b> (token) ve <b>TELEGRAM_CHAT_ID</b> (Id). Kaydet.</li>
+      </ol></div>`;
+  }
+
+  function renderSwing() {
+    if (!SW || !SW.ok) return;
+    $("swLoading").hidden = true; $("swBody").hidden = false;
+    $("swTotal").textContent = f2(SW.total) + " $";
+    $("swPnl").innerHTML = `<b class="${SW.pnl >= 0 ? "up" : "down"}">${sgn(SW.pnl)} $ (${pcs(SW.pnl / SW.start * 100)})</b>`;
+    const openN = SW.assets.filter((a) => a.pos).length;
+    $("swSub").textContent = `Başlangıç ${f2(SW.start, 0)} $ (6 varlığa eşit bölünmüş) · son ~14 ay simülasyonu · açık pozisyon: ${openN} · ${SW.closed.length} kapanmış işlem`;
+    $("swNotify").innerHTML = notifyBox(SW) + ("Notification" in window && Notification.permission === "default" ? '<div style="margin:6px 0"><button class="ghost" id="brNotif">Bu tarayıcıda da bildirim aç</button></div>' : "");
+    const bn = $("brNotif"); if (bn) bn.onclick = async () => { await Notification.requestPermission(); renderSwing(); };
+    const tt = $("tgTest"); if (tt) tt.onclick = async () => { $("tgRes").textContent = "gönderiliyor…"; const r = await api("/api/tg/test"); $("tgRes").textContent = r.ok ? "gönderildi ✓" : "hata: " + (r.error || ""); };
+    $("swEq").innerHTML = eqSVG(SW.eq) + `<div class="mut" style="font-size:11.5px">Swing hesap değeri (gri kesikli çizgi = başlangıç)</div>`;
+    const chip = (a) => a.pending === "enter" ? '<span class="badge" style="background:#1f8f55;border-color:#1f8f55;color:#fff">GİRİŞ ZAMANI</span>' : a.pending === "exit" ? '<span class="badge" style="background:#b84444;border-color:#b84444;color:#fff">ÇIKIŞ ZAMANI</span>' : a.pos ? '<span class="badge" style="border-color:#e8b04a;color:#e8b04a">POZİSYONDA</span>' : '<span class="badge">bekliyor</span>';
+    $("swAssets").innerHTML = SW.assets.map((a) => {
+      const marks = a.trades.concat(a.pos ? [{ t_in: a.pos.t_in, px_in: a.pos.entry, t_out: null }] : []);
+      return `<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;align-items:center"><b>${a.name}</b>${chip(a)}<span style="font-weight:650;font-variant-numeric:tabular-nums">${f2(a.price, dp(a.price))} $</span></div>
+        <div class="mut" style="font-size:12px">son kapanış: ${hmd(a.bar_ts)} · skor ${a.score}/4</div>
+        ${swingCond(a)}${swingSVG(a, marks)}
+        <div class="mut" style="font-size:11.5px;margin:2px 0">Fiyat (beyaz) · 200 günlük ortalama (sarı) · Bollinger bandı (mavi) · direnç (kırmızı) · destek (yeşil) · son 200 gün</div>${rsiSVG2(a)}</div>`;
+    }).join("");
+    const hm = (t) => hmd(t);
+    const opens = SW.assets.filter((a) => a.pos).map((a) => `<tr class="open"><td><b>${a.name}</b><small>AÇIK</small></td><td class="${a.pos.pnl >= 0 ? "up" : "down"}"><b>${pcs(a.pos.pnl_pct)}</b><small>${sgn(a.pos.pnl)} $</small></td><td>${hm(a.pos.t_in)}<small>${f2(a.pos.entry, dp(a.pos.entry))} $</small></td><td>—<small>şu an ${f2(a.price, dp(a.price))}</small></td><td class="mut">bekliyor</td></tr>`);
+    const closed = SW.closed.slice(0, 40).map((t) => `<tr class="${t.pnl >= 0 ? "win" : "loss"}"><td><b>${t.name}</b><small>${f2(t.days, 0)} gün</small></td><td class="${t.pnl >= 0 ? "up" : "down"}"><b>${pcs(t.pnl_pct)}</b><small>${sgn(t.pnl)} $</small></td><td>${hm(t.t_in)}<small>${f2(t.px_in, dp(t.px_in))} $</small></td><td>${hm(t.t_out)}<small>${f2(t.px_out, dp(t.px_out))} $</small></td><td class="mut" style="white-space:normal;min-width:110px">${t.why}</td></tr>`);
+    $("swTrades").innerHTML = opens.concat(closed).join("") || '<tr><td colspan="5" class="mut">Henüz işlem yok.</td></tr>';
+    // uyarı kutusu + tarayıcı bildirimi
+    const alerts = [];
+    SW.assets.forEach((a) => { if (a.pending === "enter") alerts.push(["🟢 GİRİŞ ZAMANI: " + a.name, `${a.score}/4 analiz onayladı, kapanış ${f2(a.price, dp(a.price))} $. Önerilen stop ${f2(a.price - (a.stop_dist || 0), dp(a.price))}.`, a.sym + ":enter:" + a.bar_date]);
+      if (a.pending === "exit") alerts.push(["🔴 ÇIKIŞ ZAMANI: " + a.name, "Neden: " + a.reason + ". K/Z " + (a.pos ? pcs(a.pos.pnl_pct) : ""), a.sym + ":exit:" + a.bar_date]); });
+    const box = $("alertBox"); box.hidden = !alerts.length;
+    box.innerHTML = alerts.map((x) => `<div style="margin:4px 0"><b>${x[0]}</b><div class="mut" style="font-size:13px">${x[1]}</div></div>`).join("");
+    alerts.forEach((x) => { if (!swPrev[x[2]] && "Notification" in window && Notification.permission === "granted" && Object.keys(swPrev).length >= 0 && swPrev.__init) { try { new Notification(x[0], { body: x[1] }); } catch (e) {} } swPrev[x[2]] = 1; });
+    swPrev.__init = 1;
+  }
+  async function swingTick() { try { SW = await api("/api/bot/swing"); renderSwing(); } catch (e) { $("swLoading").textContent = "Swing verisi alınamadı, yeniden deniyorum…"; } }
+  swingTick(); setInterval(swingTick, 60000);
+
   tick(); setInterval(tick, 5000);
 </script>
 </body>

@@ -96,3 +96,37 @@ class TrendPullback:
         return held >= self.max_hold or I["c"][i] > I["x"][i]
 
 REGISTRY = {"mr": MeanReversion, "donchian": Donchian, "pullback": TrendPullback}
+
+
+class Swing:
+    """Günlük swing: 4 teknik analiz birlikte oy verir.
+      1) TREND      : kapanış > 200 günlük ortalama (ZORUNLU)
+      2) DİRENÇ     : kapanış, önceki brk_n günün en yüksek kapanışını aşıyor (direnç kırılımı)
+      3) MOMENTUM   : RSI(14) > rsi_min
+      4) BOLLINGER  : kapanış > orta bant (20 günlük ortalama)
+    Giriş: trend şart + toplam >= min_score  (4 üzerinden)
+    Çıkış: kapanış 200 günlüğün altına inerse | destek (önceki sup_n günün en düşüğü) kırılırsa | ATR stop"""
+    def __init__(self, min_score=3, brk_n=20, sup_n=10, rsi_min=50, trend_n=200, bb_n=20, sl_atr=3.0, exit_mode="support"):
+        self.min_score, self.brk_n, self.sup_n, self.rsi_min = min_score, brk_n, sup_n, rsi_min
+        self.trend_n, self.bb_n, self.sl_atr, self.exit_mode = trend_n, bb_n, sl_atr, exit_mode
+    def params(self): return dict(min_score=self.min_score, brk_n=self.brk_n, sup_n=self.sup_n, rsi_min=self.rsi_min, exit_mode=self.exit_mode)
+    def prepare(self, bars):
+        c = [b[4] for b in bars]; sma_t = sma_std(c, self.trend_n)[0]; mid, sd = sma_std(c, self.bb_n)
+        return dict(c=c, t=sma_t, mid=mid, sd=sd, r=rsi(c, 14), a=atr(bars, 14),
+                    hh=_rolling_extreme(c, self.brk_n, max), ll=_rolling_extreme([b[3] for b in bars], self.sup_n, min))
+    def score(self, I, i):
+        if None in (I["t"][i], I["r"][i], I["hh"][i], I["mid"][i]): return None
+        c = I["c"][i]
+        return (c > I["t"][i], c > I["hh"][i], I["r"][i] > self.rsi_min, c > I["mid"][i])
+    def entry_signal(self, I, i):
+        s = self.score(I, i)
+        if s is None or I["a"][i] is None: return 0
+        return 1 if s[0] and sum(s) >= self.min_score else 0
+    def stop_dist(self, I, i): return self.sl_atr * I["a"][i]
+    def exit_signal(self, I, i, d, held):
+        s = self.score(I, i)
+        if s is None: return False
+        if not s[0] or (I["ll"][i] is not None and I["c"][i] < I["ll"][i]): return True
+        return self.exit_mode == "score" and sum(s) <= 1
+
+REGISTRY["swing"] = Swing

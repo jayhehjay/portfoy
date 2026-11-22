@@ -120,6 +120,7 @@ def reset():
 # Kural ("düşükten al, ortalamaya dönünce sat"), 5 dakikalık mumlar, dakikada bir karar:
 #   AL : fiyat alt Bollinger bandının (SMA20 - 2*sapma) altında VE RSI(14) < 35
 #   SAT: fiyat SMA20'ye dönünce (hedef)  |  giriş fiyatından %1,5 düşünce (stop)  |  3 saat dolunca (zaman stopu)
+AUTO_ENABLED = False      # dakikalık bot durduruldu (araştırma: kısa vadede kâr üretmedi); swing botu (swinglive.py) kullanılıyor
 AUTO_SYMS = ["BTC-USD", "ETH-USD"]
 AUTO_USD = 100.0          # her işlem tutarı
 AUTO_MAX_POS = 2
@@ -284,6 +285,9 @@ def start_auto():
                 pass
             time.sleep(6 * 3600)
     threading.Thread(target=loop, daemon=True).start()
+
+    if not AUTO_ENABLED:
+        return
 
     def live():           # dakikada bir canlı karar
         time.sleep(10)
