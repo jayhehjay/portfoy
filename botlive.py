@@ -126,7 +126,7 @@ AUTO_MAX_POS = 2
 AUTO_STOP = 0.015
 AUTO_RSI = 35
 AUTO_GAP = 0.0025
-SERIES_N = 144            # grafikte son 12 saat (5 dk'lık 144 mum)
+SERIES_N = 288            # grafikte son 24 saat (5 dk'lık 288 mum)
 AUTO_MAX_HOLD = 3 * 3600
 AUTO_COOLDOWN = 15 * 60
 AUTO_FILE = os.path.join(DIR, "bot_auto.json")
@@ -225,20 +225,41 @@ def auto_tick():
         _asave(s)
     _last_tick[0] = now
 
+def _closed_trades(s):
+    """Alış ve satış işaretlerini eşleştirip tamamlanmış işlemlerin listesini çıkarır (yeniden eskiye)."""
+    openb, out = {}, []
+    sells = {(l["t"]): l for l in s["log"] if l["kind"] == "sell"}
+    for m in sorted(s["marks"], key=lambda x: x["t"]):
+        if m["side"] == "buy":
+            openb[m["sym"]] = m
+        elif m["sym"] in openb:
+            bm = openb.pop(m["sym"]); lg = None
+            for l in s["log"]:
+                if l["kind"] == "sell" and l["t"] == m["t"] and NAMES.get(m["sym"], m["sym"]) in l["txt"]:
+                    lg = l; break
+            pnl, why = None, ""
+            if lg:
+                mt = re.search(r"→ ([+-]?[\d.]+) \$ \((.*)\)\s*$", lg["txt"])
+                if mt: pnl, why = float(mt.group(1)), mt.group(2)
+            pct = (m["px"] / bm["px"] - 1) * 100
+            out.append({"sym": m["sym"], "name": NAMES.get(m["sym"], m["sym"]), "t_in": bm["t"], "px_in": bm["px"], "t_out": m["t"], "px_out": m["px"],
+                        "pnl": pnl if pnl is not None else AUTO_USD * pct / 100, "pnl_pct": pct, "why": why, "mins": round((m["t"] - bm["t"]) / 60)})
+    return out[::-1]
+
 def auto_state():
     with _lock:
         s = _aload()
     pos, total = [], s["cash"]
     for sym, p in s["pos"].items():
         px = _eval.get(sym, {}).get("price") or p["avg"]; val = p["qty"] * px; total += val
-        pos.append({"symbol": sym, "name": NAMES.get(sym, sym), "avg": p["avg"], "price": px, "value": val,
+        pos.append({"symbol": sym, "name": NAMES.get(sym, sym), "avg": p["avg"], "price": px, "value": val, "qty": p["qty"],
                     "pnl": val - p["cost"], "pnl_pct": (val / p["cost"] - 1) * 100, "opened": p["opened"],
                     "stop_px": p["avg"] * (1 - AUTO_STOP), "target_px": _eval.get(sym, {}).get("sma"),
                     "time_left": max(0, AUTO_MAX_HOLD - (int(time.time()) - p["opened"]))})
     trades = [l for l in s["log"] if l["kind"] == "sell"]
     return {"cash": s["cash"], "start": s["start"], "total": total, "pnl": total - s["start"], "positions": pos,
             "log": s["log"][-40:][::-1], "marks": s["marks"], "eval": _eval, "last_tick": _last_tick[0],
-            "trades": len(trades), "wins": sum(1 for l in trades if "+" in l["txt"].split("→")[1][:3]),
+            "closed": _closed_trades(s), "trades": len(trades), "wins": sum(1 for l in trades if "+" in l["txt"].split("→")[1][:3]),
             "rule": "Alt Bollinger bandı + RSI<35 + yeterli düşüş (%0,25+) → AL 100 $; ortalamaya dönünce SAT; %1,5 stop; 3 sa zaman stopu"}
 
 def auto_reset():
