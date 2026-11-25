@@ -428,7 +428,7 @@
       ${row(c.boll, "Bollinger orta bandının (20 günlük ort.) üstünde", f2(a.mid, d))}</div>`;
     if (a.pos) {
       const p = a.pos;
-      h += `<div class="exit"><b>Pozisyondasın</b> · giriş ${hmd(p.t_in)} @ ${f2(p.entry, d)} · şu an <b class="${p.pnl >= 0 ? "up" : "down"}">${pcs(p.pnl_pct)} (${sgn(p.pnl)} $)</b><br>
+      h += `<div class="exit"><b>Pozisyondasın</b> · giriş ${hmd(p.t_in)} @ ${f2(p.entry, d)} · şu an <b class="${(a.live ? p.qty * (a.live - p.entry) : p.pnl) >= 0 ? "up" : "down"}">${pcs(a.live ? (a.live / p.entry - 1) * 100 : p.pnl_pct)} (${sgn(a.live ? p.qty * (a.live - p.entry) : p.pnl)} $)</b><br>
         Çıkış şartları (biri olursa satar): kapanış <b>${f2(a.sma200, d)}</b> (200 günlük) altına inerse · kapanış <b>${f2(a.support, d)}</b> (destek) altına inerse · stop <b>${f2(p.stop, d)}</b> (${gap(p.stop)})</div>`;
     } else if (a.pending === "enter") {
       h += `<div class="need" style="border-color:#2f7a52;background:#0f2a1e"><b>GİRİŞ ZAMANI.</b> ${a.score}/4 analiz onayladı. Bot sanal alımı yaptı. Önerilen stop: <b>${f2(a.price - (a.stop_dist || 0), d)}</b> (3×ATR).</div>`;
@@ -438,7 +438,7 @@
       if (!c.breakout) need.push(`kapanış 20 günlük zirvenin (<b>${f2(a.resistance, d)}</b>) üstüne çıksın (${gap(a.resistance)})`);
       if (!c.rsi) need.push(`RSI 50 üstüne çıksın (şu an ${f2(a.rsi, 0)})`);
       if (!c.boll) need.push(`kapanış orta bandın (<b>${f2(a.mid, d)}</b>) üstüne çıksın (${gap(a.mid)})`);
-      h += `<div class="need"><b>Giriş için: trend şart + en az 3/4. Şu an ${a.score}/4.</b> ${c.trend ? "Eksikler" : "Önce"}: ${need.join("; ")}.</div>`;
+      h += `<div class="need"><b>Giriş için: trend şart + en az 3/4. Son kapanışa göre ${a.score}/4.</b> ${c.trend ? "Eksikler" : "Önce"}: ${need.join("; ")}.</div>`;
     }
     return h;
   }
@@ -467,8 +467,9 @@
     const chip = (a) => a.pending === "enter" ? '<span class="badge" style="background:#1f8f55;border-color:#1f8f55;color:#fff">GİRİŞ ZAMANI</span>' : a.pending === "exit" ? '<span class="badge" style="background:#b84444;border-color:#b84444;color:#fff">ÇIKIŞ ZAMANI</span>' : a.pos ? '<span class="badge" style="border-color:#e8b04a;color:#e8b04a">POZİSYONDA</span>' : '<span class="badge">bekliyor</span>';
     $("swAssets").innerHTML = SW.assets.map((a) => {
       const marks = a.trades.concat(a.pos ? [{ t_in: a.pos.t_in, px_in: a.pos.entry, t_out: null }] : []);
-      return `<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;align-items:center"><b>${a.name}</b>${chip(a)}<span style="font-weight:650;font-variant-numeric:tabular-nums">${f2(a.price, dp(a.price))} $</span></div>
-        <div class="mut" style="font-size:12px">son kapanış: ${hmd(a.bar_ts)} · skor ${a.score}/4</div>
+      return `<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;align-items:center"><b>${a.name}</b>${chip(a)}<span style="font-weight:650;font-variant-numeric:tabular-nums" id="lv-${a.sym}">${f2(a.live || a.price, dp(a.live || a.price))} $</span></div>
+        <div class="mut" style="font-size:12px">${a.live ? `<b style="color:var(--fg)">canlı fiyat</b>${a.live_time ? " · " + clock(a.live_time) : ""} · ${pcs((a.live / a.price - 1) * 100)} (son kapanışa göre) · ` : ""}karar fiyatı = son günlük kapanış ${f2(a.price, dp(a.price))} $ (${hmd(a.bar_ts)}) · skor ${a.score}/4</div>
+        ${a.data_lag ? '<div class="mut" style="font-size:12px;color:var(--warn)">⚠ Yahoo bu varlık için en son günlük mumu henüz üretmedi, sinyal 1 gün geriden gelebilir.</div>' : ""}
         ${swingCond(a)}${swingSVG(a, marks)}
         <div class="mut" style="font-size:11.5px;margin:2px 0">Fiyat (beyaz) · 200 günlük ortalama (sarı) · Bollinger bandı (mavi) · direnç (kırmızı) · destek (yeşil) · son 200 gün</div>${rsiSVG2(a)}</div>`;
     }).join("");

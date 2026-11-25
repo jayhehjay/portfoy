@@ -151,7 +151,24 @@ def get(max_age=1500):
         if _cache["res"] is None or time.time() - _cache["t"] > max_age:
             _cache["res"] = compute(); _cache["t"] = time.time()
         res = _cache["res"]
-    res["notify_ready"] = bool(NOTIFY_READY())
+    res = dict(res); res["notify_ready"] = bool(NOTIFY_READY())
+    # canlı fiyat (her istekte, 30 sn önbellekli) + veri gecikmesi
+    try:
+        import botlive
+    except Exception:
+        botlive = None
+    yday = _day(time.time() - 86400)
+    assets = []
+    for a in res["assets"]:
+        a = dict(a); a["live"] = None; a["live_time"] = None
+        if botlive:
+            try:
+                ch = botlive.chart(a["sym"], "5m", "1d", ttl=30); a["live"] = ch["price"]; a["live_time"] = ch["price_time"]
+            except Exception:
+                pass
+        a["data_lag"] = a["bar_date"] < yday and not (a["sym"] in ("GC=F", "SI=F", "SPY", "QQQ") and time.gmtime().tm_wday in (0, 5, 6))   # hafta sonu/pazartesi hariç
+        assets.append(a)
+    res["assets"] = assets
     return res
 
 def start():
