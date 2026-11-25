@@ -27,6 +27,41 @@ def _mods():
 def _day(ts):
     return time.strftime("%Y-%m-%d", time.gmtime(ts))
 
+
+def _wkey(t): return time.strftime("%G-%V", time.gmtime(t))
+def _mkey(t): return time.strftime("%Y-%m", time.gmtime(t))
+
+def _agg(bars, keyfn):
+    out, cur, last = [], None, None
+    for b in bars:
+        k = keyfn(b[0])
+        if k != last:
+            if cur: out.append(cur)
+            cur = [b[0], b[1], b[2], b[3], b[4]]; last = k
+        else:
+            cur[2] = max(cur[2], b[2]); cur[3] = min(cur[3], b[3]); cur[4] = b[4]
+    if cur: out.append(cur)
+    return out
+
+def _tf(bars, keyfn, ma_n, brk_n, sup_n, keep):
+    """Haftalık/aylık trend özeti: ortalama, RSI, destek/direnç, durum, grafik serisi."""
+    strategy = _mods()[1]
+    per = _agg(bars, keyfn); c = [q[4] for q in per]; n = len(per); i = n - 1
+    ma = strategy.sma_std(c, ma_n)[0]; mid, sd = strategy.sma_std(c, 20); r = strategy.rsi(c, 14)
+    if n < 3 or ma[i] is None or r[i] is None:
+        return None
+    res = max(q[2] for q in per[max(0, i - brk_n):i]); sup = min(q[3] for q in per[max(0, i - sup_n):i])
+    status = "up" if (c[i] > ma[i] and r[i] > 50) else "down" if (c[i] < ma[i] and r[i] < 50) else "mixed"
+    lo0 = max(n - keep, 0)
+    def rr(v, d=4): return None if v is None else round(v, d)
+    ser = {"t": [per[k][0] for k in range(lo0, n)], "c": [rr(c[k]) for k in range(lo0, n)], "sma200": [rr(ma[k]) for k in range(lo0, n)],
+           "mid": [rr(mid[k]) for k in range(lo0, n)],
+           "up": [rr(mid[k] + 2 * sd[k]) if mid[k] is not None else None for k in range(lo0, n)],
+           "lo": [rr(mid[k] - 2 * sd[k]) if mid[k] is not None else None for k in range(lo0, n)],
+           "rsi": [rr(r[k], 1) for k in range(lo0, n)]}
+    return {"price": c[i], "ma": ma[i], "ma_n": ma_n, "ma_pct": (c[i] / ma[i] - 1) * 100, "rsi": r[i], "resistance": res, "support": sup,
+            "status": status, "partial": keyfn(bars[-1][0]) == keyfn(time.time()), "brk_n": brk_n, "sup_n": sup_n, "series": ser}
+
 def _asset(sym, name, bps):
     data, strategy, engine = _mods()
     bars = data.fetch(sym, "1d", "3y", use_cache=False)
@@ -67,7 +102,8 @@ def _asset(sym, name, bps):
             "pending": pend, "reason": reason, "stop_dist": (st.stop_dist(I, i) if I["a"][i] else None),
             "pos": ({"entry": pos.entry, "stop": pos.stop, "qty": pos.qty, "t_in": pos.ts, "pnl": pos.qty * (c - pos.entry),
                      "pnl_pct": (c / pos.entry - 1) * 100, "value": pos.qty * c} if pos else None),
-            "trades": trades, "series": series, "cap": cap, "equity": a.mark(c), "eq": eq}
+            "trades": trades, "series": series, "cap": cap, "equity": a.mark(c), "eq": eq,
+            "mtf": {"weekly": _tf(bars, _wkey, 40, 26, 13, 104), "monthly": _tf(bars, _mkey, 10, 12, 6, 36)}}
 
 def compute():
     assets, errs = [], []
