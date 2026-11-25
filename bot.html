@@ -76,6 +76,7 @@
       <div class="mut" style="font-size:12.5px;margin:2px 0 8px" id="swSub"></div>
       <div id="swNotify"></div>
       <div id="swEq" style="margin:6px 0"></div>
+      <div id="swPanel"></div>
       <div id="swAssets"></div>
       <h2 style="margin-top:14px">İşlem geçmişi · son ~14 ay simülasyon</h2>
       <div class="scroll th"><table><thead><tr><th>Varlık</th><th>K/Z</th><th>Giriş</th><th>Çıkış</th><th>Neden</th></tr></thead><tbody id="swTrades"></tbody></table></div>
@@ -403,10 +404,11 @@
     const s = a.series, n = s.t.length; if (n < 5) return "";
     const W = 640, H = 76, m = { l: 6, r: 6, t: 6, b: 6 }, t0 = s.t[0], t1 = s.t[n - 1];
     const X = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - v / 100) * (H - m.t - m.b);
-    const d = s.rsi.map((v, i) => (v == null ? "" : (i ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1))).join("");
+    let d = "", pen = false; s.rsi.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + X(s.t[i]).toFixed(1) + " " + Y(v).toFixed(1); pen = true; });
+    const lastR = s.rsi.filter((v) => v != null).pop(); if (lastR == null) return "";
     return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="RSI göstergesi"><rect x="${m.l}" y="${Y(100)}" width="${W - m.l - m.r}" height="${Y(50) - Y(100)}" fill="#2fbf71" fill-opacity=".10"/>
       <line x1="${m.l}" x2="${W - m.r}" y1="${Y(50)}" y2="${Y(50)}" stroke="#2fbf71" stroke-dasharray="4 3"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(30)}" y2="${Y(30)}" stroke="#8b94a3" stroke-opacity=".5" stroke-dasharray="4 3"/><line x1="${m.l}" x2="${W - m.r}" y1="${Y(70)}" y2="${Y(70)}" stroke="#8b94a3" stroke-opacity=".5" stroke-dasharray="4 3"/>
-      <path d="${d}" fill="none" stroke="#5aa0ff" stroke-width="1.6"/><circle cx="${X(t1)}" cy="${Y(s.rsi[n - 1])}" r="3.5" fill="#5aa0ff"/>
+      <path d="${d}" fill="none" stroke="#5aa0ff" stroke-width="1.6"/><circle cx="${X(t1)}" cy="${Y(lastR)}" r="3.5" fill="#5aa0ff"/>
       <text x="${m.l + 2}" y="${Y(50) - 3}" fill="#2fbf71" font-size="10">RSI 50 üstü = momentum var</text><text x="${W - m.r}" y="${Y(70) - 3}" text-anchor="end" fill="#8b94a3" font-size="10">70</text><text x="${W - m.r}" y="${Y(30) - 3}" text-anchor="end" fill="#8b94a3" font-size="10">30</text></svg>`;
   }
   function eqSVG(eq) {
@@ -428,7 +430,7 @@
       ${row(c.boll, "Bollinger orta bandının (20 günlük ort.) üstünde", f2(a.mid, d))}</div>`;
     if (a.pos) {
       const p = a.pos;
-      h += `<div class="exit"><b>Pozisyondasın</b> · giriş ${hmd(p.t_in)} @ ${f2(p.entry, d)} · şu an <b class="${p.pnl >= 0 ? "up" : "down"}">${pcs(p.pnl_pct)} (${sgn(p.pnl)} $)</b><br>
+      h += `<div class="exit"><b>Pozisyondasın</b> · giriş ${hmd(p.t_in)} @ ${f2(p.entry, d)} · şu an <b class="${(a.live ? p.qty * (a.live - p.entry) : p.pnl) >= 0 ? "up" : "down"}">${pcs(a.live ? (a.live / p.entry - 1) * 100 : p.pnl_pct)} (${sgn(a.live ? p.qty * (a.live - p.entry) : p.pnl)} $)</b><br>
         Çıkış şartları (biri olursa satar): kapanış <b>${f2(a.sma200, d)}</b> (200 günlük) altına inerse · kapanış <b>${f2(a.support, d)}</b> (destek) altına inerse · stop <b>${f2(p.stop, d)}</b> (${gap(p.stop)})</div>`;
     } else if (a.pending === "enter") {
       h += `<div class="need" style="border-color:#2f7a52;background:#0f2a1e"><b>GİRİŞ ZAMANI.</b> ${a.score}/4 analiz onayladı. Bot sanal alımı yaptı. Önerilen stop: <b>${f2(a.price - (a.stop_dist || 0), d)}</b> (3×ATR).</div>`;
@@ -438,7 +440,7 @@
       if (!c.breakout) need.push(`kapanış 20 günlük zirvenin (<b>${f2(a.resistance, d)}</b>) üstüne çıksın (${gap(a.resistance)})`);
       if (!c.rsi) need.push(`RSI 50 üstüne çıksın (şu an ${f2(a.rsi, 0)})`);
       if (!c.boll) need.push(`kapanış orta bandın (<b>${f2(a.mid, d)}</b>) üstüne çıksın (${gap(a.mid)})`);
-      h += `<div class="need"><b>Giriş için: trend şart + en az 3/4. Şu an ${a.score}/4.</b> ${c.trend ? "Eksikler" : "Önce"}: ${need.join("; ")}.</div>`;
+      h += `<div class="need"><b>Giriş için: trend şart + en az 3/4. Son kapanışa göre ${a.score}/4.</b> ${c.trend ? "Eksikler" : "Önce"}: ${need.join("; ")}.</div>`;
     }
     return h;
   }
@@ -463,14 +465,17 @@
     $("swNotify").innerHTML = notifyBox(SW) + ("Notification" in window && Notification.permission === "default" ? '<div style="margin:6px 0"><button class="ghost" id="brNotif">Bu tarayıcıda da bildirim aç</button></div>' : "");
     const bn = $("brNotif"); if (bn) bn.onclick = async () => { await Notification.requestPermission(); renderSwing(); };
     const tt = $("tgTest"); if (tt) tt.onclick = async () => { $("tgRes").textContent = "gönderiliyor…"; const r = await api("/api/tg/test"); $("tgRes").textContent = r.ok ? "gönderildi ✓" : "hata: " + (r.error || ""); };
+    $("swPanel").innerHTML = panelHTML();
     $("swEq").innerHTML = eqSVG(SW.eq) + `<div class="mut" style="font-size:11.5px">Swing hesap değeri (gri kesikli çizgi = başlangıç)</div>`;
     const chip = (a) => a.pending === "enter" ? '<span class="badge" style="background:#1f8f55;border-color:#1f8f55;color:#fff">GİRİŞ ZAMANI</span>' : a.pending === "exit" ? '<span class="badge" style="background:#b84444;border-color:#b84444;color:#fff">ÇIKIŞ ZAMANI</span>' : a.pos ? '<span class="badge" style="border-color:#e8b04a;color:#e8b04a">POZİSYONDA</span>' : '<span class="badge">bekliyor</span>';
     $("swAssets").innerHTML = SW.assets.map((a) => {
       const marks = a.trades.concat(a.pos ? [{ t_in: a.pos.t_in, px_in: a.pos.entry, t_out: null }] : []);
-      return `<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;align-items:center"><b>${a.name}</b>${chip(a)}<span style="font-weight:650;font-variant-numeric:tabular-nums">${f2(a.price, dp(a.price))} $</span></div>
-        <div class="mut" style="font-size:12px">son kapanış: ${hmd(a.bar_ts)} · skor ${a.score}/4</div>
+      return `<div style="padding:12px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;align-items:center"><b>${a.name}</b>${chip(a)}<span style="font-weight:650;font-variant-numeric:tabular-nums" id="lv-${a.sym}">${f2(a.live || a.price, dp(a.live || a.price))} $</span></div>
+        <div class="mut" style="font-size:12px">${a.live ? `<b style="color:var(--fg)">canlı fiyat</b>${a.live_time ? " · " + clock(a.live_time) : ""} · ${pcs((a.live / a.price - 1) * 100)} (son kapanışa göre) · ` : ""}karar fiyatı = son günlük kapanış ${f2(a.price, dp(a.price))} $ (${hmd(a.bar_ts)}) · skor ${a.score}/4</div>
+        ${a.data_lag ? '<div class="mut" style="font-size:12px;color:var(--warn)">⚠ Yahoo bu varlık için en son günlük mumu henüz üretmedi, sinyal 1 gün geriden gelebilir.</div>' : ""}
         ${swingCond(a)}${swingSVG(a, marks)}
-        <div class="mut" style="font-size:11.5px;margin:2px 0">Fiyat (beyaz) · 200 günlük ortalama (sarı) · Bollinger bandı (mavi) · direnç (kırmızı) · destek (yeşil) · son 200 gün</div>${rsiSVG2(a)}</div>`;
+        <div class="mut" style="font-size:11.5px;margin:2px 0">Fiyat (beyaz) · 200 günlük ortalama (sarı) · Bollinger bandı (mavi) · direnç (kırmızı) · destek (yeşil) · son 200 gün</div>${rsiSVG2(a)}
+        <details class="how" style="margin-top:8px"><summary><b>Haftalık ve aylık detay</b> (200 gün ≈ 40 hafta ≈ 10 ay)</summary>${tfDetail(a, "weekly", "Haftalık (son 2 yıl)")}${tfDetail(a, "monthly", "Aylık (son 3 yıl)")}</details></div>`;
     }).join("");
     const hm = (t) => hmd(t);
     const opens = SW.assets.filter((a) => a.pos).map((a) => `<tr class="open"><td><b>${a.name}</b><small>AÇIK</small></td><td class="${a.pos.pnl >= 0 ? "up" : "down"}"><b>${pcs(a.pos.pnl_pct)}</b><small>${sgn(a.pos.pnl)} $</small></td><td>${hm(a.pos.t_in)}<small>${f2(a.pos.entry, dp(a.pos.entry))} $</small></td><td>—<small>şu an ${f2(a.price, dp(a.price))}</small></td><td class="mut">bekliyor</td></tr>`);
@@ -485,6 +490,36 @@
     alerts.forEach((x) => { if (!swPrev[x[2]] && "Notification" in window && Notification.permission === "granted" && Object.keys(swPrev).length >= 0 && swPrev.__init) { try { new Notification(x[0], { body: x[1] }); } catch (e) {} } swPrev[x[2]] = 1; });
     swPrev.__init = 1;
   }
+
+  // ---- Çoklu zaman dilimi trend panosu ----
+  function tfCell(status, pct, rsi, partial) {
+    const m = { up: ["↑ yükseliş", "#2fbf71"], down: ["↓ düşüş", "#ef5b5b"], mixed: ["↔ karışık", "#e8b04a"] }[status];
+    return `<span style="color:${m[1]};font-weight:650">${m[0]}</span><small>ort.'ya ${pcs(pct)} · RSI ${f2(rsi, 0)}${partial ? " · devam ediyor" : ""}</small>`;
+  }
+  function panelHTML() {
+    const rows = SW.assets.map((a) => {
+      const w = a.mtf && a.mtf.weekly, m = a.mtf && a.mtf.monthly;
+      const dStatus = a.conds.trend && a.rsi > 50 ? "up" : (!a.conds.trend && a.rsi < 50 ? "down" : "mixed");
+      const sts = [dStatus, w && w.status, m && m.status].filter(Boolean), ups = sts.filter((x) => x === "up").length, downs = sts.filter((x) => x === "down").length;
+      const al = ups === sts.length ? ['<span class="up"><b>Hepsi yükseliş</b></span>', ""] : downs === sts.length ? ['<span class="down"><b>Hepsi düşüş</b></span>', ""] : [`<b>${ups} yükseliş · ${downs} düşüş</b>`, ""];
+      return `<tr><td><b>${a.name}</b></td><td>${tfCell(dStatus, (a.price / a.sma200 - 1) * 100, a.rsi, false)}</td><td>${w ? tfCell(w.status, w.ma_pct, w.rsi, w.partial) : "—"}</td><td>${m ? tfCell(m.status, m.ma_pct, m.rsi, m.partial) : "—"}</td><td>${al[0]}</td></tr>`;
+    }).join("");
+    return `<h2 style="margin-top:14px">Trend panosu · günlük, haftalık, aylık</h2>
+      <div class="scroll th"><table><thead><tr><th>Varlık</th><th>Günlük<br><span style="font-weight:400">200 gün ort.</span></th><th>Haftalık<br><span style="font-weight:400">40 hafta ort.</span></th><th>Aylık<br><span style="font-weight:400">10 ay ort.</span></th><th>Uyum</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="mut" style="font-size:12px;margin-top:6px"><b>Yükseliş</b> = fiyat ortalamanın üstünde ve RSI 50 üstünde. <b>Düşüş</b> = ortalamanın altında ve RSI 50 altında. Aksi karışık. 40 hafta ≈ 200 gün, 10 ay ≈ 200 gün (aynı trend, farklı zoom).
+      Haftalık/aylık yön <u>bilgi içindir</u>: testlerde bunları giriş şartı yapmak botu kötüleştirdi (girişi geciktiriyor), o yüzden bot günlük kararla çalışmaya devam ediyor.</div>`;
+  }
+  function tfDetail(a, key, title) {
+    const t = a.mtf && a.mtf[key]; if (!t) return "";
+    const d = dp(t.price), row = (ok, txt, val) => `<span class="ck ${ok ? "y" : "n"}">${ok ? "✓" : "✗"}</span><span>${txt}</span><span class="mut">${val}</span>`;
+    const ad = { name: a.name, series: t.series, support: t.support, resistance: t.resistance };
+    const unit = key === "weekly" ? "hafta" : "ay", gen = key === "weekly" ? "haftanın" : "ayın", ma = key === "weekly" ? "40 hafta" : "10 ay";
+    return `<div style="margin:8px 0"><b>${title}</b>${t.partial ? ` <span class="mut">(bu ${unit} devam ediyor)</span>` : ""}
+      <div class="cond">${row(t.price > t.ma, `Fiyat ${ma} ortalamanın üstünde`, f2(t.price, d) + " / " + f2(t.ma, d))}${row(t.rsi > 50, "RSI(14) 50'nin üstünde", f2(t.rsi, 0))}</div>
+      <div class="mut" style="font-size:12.5px">Direnç (önceki ${t.brk_n} ${gen} zirvesi): <b style="color:#ef5b5b">${f2(t.resistance, d)}</b> (${pcs((t.resistance / t.price - 1) * 100)}) · Destek (önceki ${t.sup_n} ${gen} dibi): <b style="color:#2fbf71">${f2(t.support, d)}</b> (${pcs((t.support / t.price - 1) * 100)})</div>
+      ${swingSVG(ad, [])}${rsiSVG2(ad)}</div>`;
+  }
+
   async function swingTick() { try { SW = await api("/api/bot/swing"); renderSwing(); } catch (e) { $("swLoading").textContent = "Swing verisi alınamadı, yeniden deniyorum…"; } }
   swingTick(); setInterval(swingTick, 60000);
 
